@@ -1,0 +1,28 @@
+{
+  "name": "nateide",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "bun@1.3.10",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bunx concurrently -k -n convex,daemon,desktop -c auto \"bunx convex dev\" \"bun --cwd apps/daemon dev\" \"bun --cwd apps/desktop dev\"",
+    "dev:desktop": "bun --cwd apps/desktop dev",
+    "dev:daemon": "bun --cwd apps/daemon dev",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.4.0",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@auth/core": "0.37",
+    "@convex-dev/auth": "^0.0.91",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "convex": "^1.32.0"
+  }
+}

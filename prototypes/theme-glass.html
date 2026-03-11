@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Frosted Glass</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+  :root {
+    --color-ink: #e2e8f0;
+    --color-muted: #64748b;
+    --color-accent: #818cf8;
+    --color-success: #34d399;
+    --color-warning: #fbbf24;
+    --color-error: #fb7185;
+    --panel-radius: 16px;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    font-size: 13px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; height: 100vh; overflow: hidden; color: var(--color-ink);
+    /* Rich gradient mesh background */
+    background: #0f172a;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.25) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.2) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.08) 0px, transparent 50%);
+  }
+
+  .preview { display: flex; height: 100vh; }
+
+  .glass {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(24px) saturate(1.2);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+  }
+
+  .sidebar {
+    width: 240px; padding: 20px; display: flex; flex-direction: column; gap: 4px;
+    border-right: 1px solid rgba(148, 163, 184, 0.06);
+  }
+  .sidebar h3 {
+    margin: 0 0 12px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1.5px; font-weight: 700; color: var(--color-muted);
+  }
+  .sidebar-item {
+    padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 13px;
+    transition: all 0.25s; font-weight: 500;
+  }
+  .sidebar-item:hover {
+    background: rgba(129, 140, 248, 0.06);
+  }
+  .sidebar-item.active {
+    background: rgba(129, 140, 248, 0.1);
+    border: 1px solid rgba(129, 140, 248, 0.15);
+    box-shadow: 0 4px 16px rgba(129, 140, 248, 0.06);
+    color: var(--color-accent);
+  }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+
+  .toolbar {
+    padding: 12px 24px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+    display: flex; gap: 10px; align-items: center;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(24px);
+  }
+  .toolbar-title { font-weight: 700; font-size: 16px; color: #f1f5f9; }
+
+  .btn {
+    padding: 7px 16px; border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    background: rgba(30, 41, 59, 0.5); color: var(--color-ink); font-size: 12px;
+    cursor: pointer; transition: all 0.25s; font-family: "Plus Jakarta Sans"; font-weight: 500;
+    backdrop-filter: blur(8px);
+  }
+  .btn:hover {
+    background: rgba(129, 140, 248, 0.1);
+    border-color: rgba(129, 140, 248, 0.2);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(139,92,246,0.25));
+    border-color: rgba(129, 140, 248, 0.2);
+    box-shadow: 0 2px 12px rgba(99,102,241,0.12);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(99,102,241,0.45), rgba(139,92,246,0.35));
+    box-shadow: 0 4px 20px rgba(99,102,241,0.18);
+  }
+
+  .content { flex: 1; padding: 28px; overflow: auto; }
+
+  .chat-sender {
+    font-size: 11px; color: var(--color-muted); margin-bottom: 6px;
+    font-family: "JetBrains Mono", monospace; font-weight: 500;
+  }
+  .chat-bubble {
+    border-radius: 16px; padding: 14px 18px;
+    margin: 6px 0; max-width: 72%; font-size: 13px; line-height: 1.65;
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.06);
+    backdrop-filter: blur(12px);
+  }
+  .chat-bubble.user {
+    margin-left: auto;
+    background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12));
+    border-color: rgba(129, 140, 248, 0.15);
+    color: #e0e7ff;
+  }
+
+  .card {
+    border-radius: var(--panel-radius); padding: 18px; margin-bottom: 14px;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.06);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+  .card-title {
+    font-weight: 700; margin-bottom: 6px; color: #f1f5f9;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-title::before {
+    content: ''; width: 24px; height: 24px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--color-accent), #a78bfa);
+    opacity: 0.4; flex-shrink: 0;
+  }
+  .card-sub { color: var(--color-muted); font-size: 12px; padding-left: 34px; }
+
+  .tag {
+    display: inline-flex; align-items: center; padding: 4px 12px;
+    border-radius: 20px; font-size: 11px; font-weight: 600;
+    backdrop-filter: blur(8px);
+  }
+  .tag-red { background: rgba(251,113,133,0.1); color: var(--color-error); border: 1px solid rgba(251,113,133,0.12); }
+  .tag-yellow { background: rgba(251,191,36,0.08); color: var(--color-warning); border: 1px solid rgba(251,191,36,0.12); }
+  .tag-blue { background: rgba(129,140,248,0.1); color: var(--color-accent); border: 1px solid rgba(129,140,248,0.12); }
+  .tag-green { background: rgba(52,211,153,0.1); color: var(--color-success); border: 1px solid rgba(52,211,153,0.12); }
+
+  .input {
+    padding: 12px 18px; border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    background: rgba(15, 23, 42, 0.5); color: var(--color-ink); width: 100%;
+    font-family: "Plus Jakarta Sans"; font-size: 13px;
+    backdrop-filter: blur(16px);
+  }
+  .input:focus {
+    outline: none;
+    border-color: rgba(129, 140, 248, 0.25);
+    box-shadow: 0 0 0 4px rgba(99,102,241,0.08), 0 4px 20px rgba(99,102,241,0.06);
+  }
+
+  .token-footer { font-size: 10px; color: var(--color-muted); margin-top: 6px; font-family: "JetBrains Mono", monospace; }
+  .agent-dot {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 10px;
+    box-shadow: 0 0 10px currentColor, 0 0 4px currentColor;
+  }
+  .session-bar { font-size: 11px; color: var(--color-muted); margin-left: auto; font-family: "JetBrains Mono", monospace; }
+
+  .theme-label {
+    position: fixed; top: 14px; right: 18px; z-index: 10;
+    background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(20px);
+    border: 1px solid rgba(129,140,248,0.15); padding: 8px 18px; border-radius: 12px;
+    font-size: 12px; font-weight: 700; color: var(--color-accent);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.12); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="theme-label">Frosted Glass</div>
+<div class="preview">
+  <div class="sidebar glass">
+    <h3>Agents</h3>
+    <div class="sidebar-item active"><span class="agent-dot" style="background:#818cf8;color:#818cf8"></span>Controller</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#fb923c;color:#fb923c"></span>Codex</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#e879f9;color:#e879f9"></span>Gemini</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#34d399;color:#34d399"></span>Kimi</div>
+    <h3 style="margin-top:24px">Pipelines</h3>
+    <div class="sidebar-item">Review Pipeline</div>
+    <div class="sidebar-item">Deploy Pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span class="session-bar">4,231 tkn &middot; $0.12</span>
+      <button class="btn">Settings</button>
+      <button class="btn btn-primary">New Chat</button>
+    </div>
+    <div class="content">
+      <div class="chat-sender">nate</div>
+      <div class="chat-bubble user">Analyze the auth module for security issues</div>
+      <div class="chat-sender" style="margin-top:18px"><span class="agent-dot" style="background:#e879f9;color:#e879f9"></span>agent-gemini</div>
+      <div class="chat-bubble">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="token-footer">274 in / 156 out (~$0.003)</div>
+      <div style="margin:18px 0; display:flex; gap:8px; flex-wrap:wrap">
+        <span class="tag tag-red">security</span>
+        <span class="tag tag-yellow">needs-review</span>
+        <span class="tag tag-blue">auth</span>
+        <span class="tag tag-green">completed</span>
+      </div>
+      <div class="card">
+        <div class="card-title">Task: Fix JWT Expiry</div>
+        <div class="card-sub">Assigned to Codex &middot; Priority: High</div>
+      </div>
+      <div style="margin-top:24px">
+        <input class="input" placeholder="Message your agents... (@mention to route)" />
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

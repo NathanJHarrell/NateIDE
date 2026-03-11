@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Terminal Green</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --g: #33ff66;
+    --g-dim: #1a8f36;
+    --g-muted: #0d5520;
+    --g-bg: rgba(51, 255, 102, 0.03);
+    --color-background: #020804;
+    --color-surface: rgba(4, 14, 6, 0.95);
+    --color-ink: #88cc99;
+    --color-muted: #2d6b3d;
+    --color-border: rgba(51, 255, 102, 0.08);
+    --color-error: #ff4444;
+    --color-warning: #cccc33;
+    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-size: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: var(--color-background); color: var(--color-ink);
+  }
+
+  /* Matrix rain canvas */
+  canvas#matrix {
+    position: fixed; inset: 0; z-index: 0;
+  }
+
+  /* Green vignette glow */
+  .vignette {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 0%,
+      rgba(51, 255, 102, 0.04) 0%,
+      transparent 50%
+    );
+  }
+
+  /* CRT scanline effect */
+  .crt-overlay {
+    position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.08) 0px,
+      rgba(0, 0, 0, 0.08) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+  .crt-overlay::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.35) 100%);
+  }
+
+  .preview { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+  .sidebar {
+    width: 240px;
+    background: linear-gradient(180deg, rgba(6, 20, 10, 0.94), rgba(2, 10, 4, 0.96));
+    border-right: 1px solid var(--color-border);
+    padding: 12px; display: flex; flex-direction: column; gap: 2px;
+    backdrop-filter: blur(12px);
+  }
+  .sidebar h3 {
+    margin: 8px 0 6px; font-size: 11px; color: var(--g-dim);
+    font-weight: 400;
+  }
+  .sidebar h3::before { content: '# '; color: var(--g-muted); }
+  .sidebar-item {
+    padding: 4px 8px; cursor: pointer; font-size: 12px;
+    transition: all 0.1s; color: var(--color-ink);
+  }
+  .sidebar-item::before { content: '  '; }
+  .sidebar-item:hover { background: var(--g-bg); }
+  .sidebar-item:hover::before { content: '> '; color: var(--g); }
+  .sidebar-item.active {
+    color: var(--g); text-shadow: 0 0 8px rgba(51,255,102,0.3);
+    background: linear-gradient(90deg, rgba(51, 255, 102, 0.04), transparent);
+  }
+  .sidebar-item.active::before { content: '> '; color: var(--g); }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+
+  .toolbar {
+    padding: 6px 16px; border-bottom: 1px solid var(--color-border);
+    display: flex; gap: 12px; align-items: center;
+    background: linear-gradient(90deg, rgba(6, 20, 10, 0.92), rgba(3, 12, 5, 0.90));
+    backdrop-filter: blur(12px);
+    color: var(--g-dim); font-size: 11px;
+  }
+  .toolbar-title {
+    color: var(--g); font-weight: 700;
+    text-shadow: 0 0 10px rgba(51,255,102,0.25);
+  }
+
+  .btn {
+    padding: 3px 12px; border-radius: 0; border: 1px solid var(--color-border);
+    background: transparent; color: var(--g-dim); font-size: 11px;
+    cursor: pointer; transition: all 0.15s; font-family: "JetBrains Mono", monospace;
+  }
+  .btn:hover { border-color: var(--g-dim); color: var(--g); text-shadow: 0 0 6px rgba(51,255,102,0.2); }
+  .btn-primary {
+    border-color: var(--g-dim); color: var(--g);
+  }
+  .btn-primary:hover {
+    background: rgba(51,255,102,0.06);
+    text-shadow: 0 0 10px rgba(51,255,102,0.3);
+    box-shadow: 0 0 12px rgba(51,255,102,0.05);
+  }
+
+  .content {
+    flex: 1; padding: 16px; overflow: auto;
+    background: linear-gradient(180deg, rgba(4, 14, 6, 0.3), transparent 30%);
+  }
+
+  .chat-sender {
+    font-size: 11px; color: var(--g-muted); margin-bottom: 2px;
+  }
+  .chat-sender .prompt { color: var(--g-dim); }
+
+  .msg-block {
+    margin: 8px 0; padding: 8px 12px;
+    border-left: 2px solid var(--color-border);
+    font-size: 12px; line-height: 1.7;
+  }
+  .msg-block.user {
+    border-left-color: var(--g-dim);
+    color: var(--g);
+  }
+  .msg-block.agent {
+    border-left-color: var(--g-muted);
+  }
+
+  .card {
+    margin: 12px 0; padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    background: linear-gradient(135deg, rgba(51, 255, 102, 0.03), rgba(20, 80, 40, 0.04), transparent);
+  }
+  .card-title {
+    color: var(--g-dim); font-weight: 600;
+  }
+  .card-title::before { content: '[TASK] '; color: var(--g-muted); font-weight: 400; }
+  .card-sub { color: var(--color-muted); font-size: 11px; margin-top: 2px; }
+
+  .tag {
+    display: inline-block; padding: 1px 6px; font-size: 10px; font-weight: 500;
+  }
+  .tag::before { content: '['; color: var(--g-muted); }
+  .tag::after { content: ']'; color: var(--g-muted); }
+  .tag-red { color: #ff6666; }
+  .tag-yellow { color: #cccc33; }
+  .tag-blue { color: #66aaff; }
+  .tag-green { color: var(--g); }
+
+  .input-line { display: flex; align-items: center; margin-top: 16px; gap: 8px; }
+  .input-prompt { color: var(--g); font-weight: 700; white-space: nowrap; text-shadow: 0 0 6px rgba(51,255,102,0.2); }
+  .input {
+    padding: 4px 0; border-radius: 0; border: none; border-bottom: 1px solid var(--color-border);
+    background: transparent; color: var(--g); width: 100%; font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+  }
+  .input:focus { outline: none; border-bottom-color: var(--g-dim); }
+  .input::placeholder { color: var(--g-muted); }
+
+  /* Blinking cursor */
+  .cursor-blink {
+    display: inline-block; width: 8px; height: 14px; background: var(--g);
+    animation: blink 1s step-end infinite; vertical-align: text-bottom;
+    margin-left: 2px; opacity: 0.7;
+  }
+  @keyframes blink { 0%,100% { opacity: 0.7; } 50% { opacity: 0; } }
+
+  .token-footer { font-size: 10px; color: var(--g-muted); margin-top: 4px; }
+  .token-footer::before { content: '// '; }
+
+  .agent-dot {
+    width: 6px; height: 6px; border-radius: 1px; display: inline-block; margin-right: 6px;
+    box-shadow: 0 0 4px currentColor;
+  }
+  .session-bar { font-size: 11px; color: var(--g-muted); margin-left: auto; }
+
+  .theme-label {
+    position: fixed; top: 8px; right: 12px; z-index: 200;
+    background: linear-gradient(135deg, rgba(6, 20, 10, 0.95), rgba(2, 10, 4, 0.95));
+    border: 1px solid var(--g-muted); padding: 4px 12px;
+    font-size: 11px; color: var(--g);
+    text-shadow: 0 0 8px rgba(51,255,102,0.3);
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--g-muted); }
+</style>
+</head>
+<body>
+<canvas id="matrix"></canvas>
+<div class="vignette"></div>
+<div class="crt-overlay"></div>
+<div class="theme-label">Terminal Green</div>
+<div class="preview">
+  <div class="sidebar">
+    <h3>agents</h3>
+    <div class="sidebar-item active"><span class="agent-dot" style="background:var(--g);color:var(--g)"></span>controller</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#ffaa33;color:#ffaa33"></span>codex</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#aa66ff;color:#aa66ff"></span>gemini</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#33cccc;color:#33cccc"></span>kimi</div>
+    <h3 style="margin-top:12px">pipelines</h3>
+    <div class="sidebar-item">review-pipeline</div>
+    <div class="sidebar-item">deploy-pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span style="color:var(--g-muted)">|</span>
+      <span>workspace: ~/nateide</span>
+      <span class="session-bar">tokens: 4231 | cost: $0.12</span>
+    </div>
+    <div class="content">
+      <div class="chat-sender"><span class="prompt">nate $</span></div>
+      <div class="msg-block user">Analyze the auth module for security issues</div>
+
+      <div class="chat-sender"><span class="prompt">agent-gemini &gt;</span></div>
+      <div class="msg-block agent">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="token-footer">274 in / 156 out (~$0.003)</div>
+
+      <div style="margin:12px 0; display:flex; gap:4px; flex-wrap:wrap">
+        <span class="tag tag-red">security</span>
+        <span class="tag tag-yellow">needs-review</span>
+        <span class="tag tag-blue">auth</span>
+        <span class="tag tag-green">completed</span>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Fix JWT Expiry</div>
+        <div class="card-sub">assigned: codex | priority: high</div>
+      </div>
+
+      <div class="input-line">
+        <span class="input-prompt">nate $</span>
+        <input class="input" placeholder="type a message..." />
+        <span class="cursor-blink"></span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ── Circuit grid with data pulses ───────────────────
+const canvas = document.getElementById('matrix');
+const ctx = canvas.getContext('2d');
+let w, h, nodes, pulses;
+
+const spacing = 80;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+  initGrid();
+}
+
+function initGrid() {
+  nodes = [];
+  pulses = [];
+  const cols = Math.ceil(w / spacing) + 1;
+  const rows = Math.ceil(h / spacing) + 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      nodes.push({
+        x: c * spacing,
+        y: r * spacing,
+        col: c, row: r,
+        glow: 0,
+        pulseChance: Math.random(),
+      });
+    }
+  }
+}
+
+function getNode(col, row) {
+  const cols = Math.ceil(w / spacing) + 1;
+  if (col < 0 || row < 0 || col >= cols || row >= Math.ceil(h / spacing) + 1) return null;
+  return nodes[row * cols + col];
+}
+
+function spawnPulse(from) {
+  // Pick a random cardinal direction
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  const dir = dirs[Math.floor(Math.random() * dirs.length)];
+  const to = getNode(from.col + dir[0], from.row + dir[1]);
+  if (!to) return;
+  pulses.push({
+    fromX: from.x, fromY: from.y,
+    toX: to.x, toY: to.y,
+    toNode: to,
+    t: 0,
+    speed: 0.008 + Math.random() * 0.008,
+  });
+}
+
+function draw(time) {
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw grid lines — very faint
+  ctx.strokeStyle = 'rgba(51, 255, 102, 0.025)';
+  ctx.lineWidth = 0.5;
+  const cols = Math.ceil(w / spacing) + 1;
+  const rows = Math.ceil(h / spacing) + 1;
+  for (let c = 0; c < cols; c++) {
+    ctx.beginPath();
+    ctx.moveTo(c * spacing, 0);
+    ctx.lineTo(c * spacing, h);
+    ctx.stroke();
+  }
+  for (let r = 0; r < rows; r++) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * spacing);
+    ctx.lineTo(w, r * spacing);
+    ctx.stroke();
+  }
+
+  // Draw nodes
+  for (const n of nodes) {
+    n.glow *= 0.96; // decay
+    const base = 0.04;
+    const alpha = base + n.glow * 0.5;
+    const r = 1.5 + n.glow * 2;
+
+    // Glow halo
+    if (n.glow > 0.1) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(51, 255, 102, ${n.glow * 0.06})`;
+      ctx.fill();
+    }
+
+    // Node dot
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(51, 255, 102, ${alpha})`;
+    ctx.fill();
+
+    // Random pulse spawning
+    if (Math.random() > 0.9992) {
+      n.glow = 1;
+      spawnPulse(n);
+    }
+  }
+
+  // Update and draw pulses
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    p.t += p.speed;
+
+    const x = p.fromX + (p.toX - p.fromX) * p.t;
+    const y = p.fromY + (p.toY - p.fromY) * p.t;
+
+    // Pulse trail
+    ctx.beginPath();
+    const trailX = p.fromX + (p.toX - p.fromX) * Math.max(0, p.t - 0.3);
+    const trailY = p.fromY + (p.toY - p.fromY) * Math.max(0, p.t - 0.3);
+    ctx.moveTo(trailX, trailY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = `rgba(51, 255, 102, ${0.15 * (1 - p.t)})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Pulse head
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180, 255, 200, ${0.3 * (1 - p.t)})`;
+    ctx.fill();
+
+    if (p.t >= 1) {
+      // Light up destination node and maybe chain
+      p.toNode.glow = 1;
+      if (Math.random() > 0.5) spawnPulse(p.toNode);
+      pulses.splice(i, 1);
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+window.addEventListener('resize', resize);
+resize();
+draw(0);
+</script>
+</body>
+</html>

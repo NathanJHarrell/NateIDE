@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OC - Depth Concept</title>
+    <style>
+        :root {
+            --bg: #0f1014;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --highlight: rgba(255, 255, 255, 0.2);
+            --accent: #70aaff;
+            --depth: 100px;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background: var(--bg);
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px; /* Key for 3D */
+        }
+
+        /* Environment */
+        .workspace {
+            position: relative;
+            width: 90vw;
+            height: 80vh;
+            transform-style: preserve-3d;
+            transform: rotateX(10deg) rotateY(-5deg); /* Initial tilt */
+            transition: transform 0.5s ease-out;
+        }
+
+        .workspace:hover {
+            transform: rotateX(0deg) rotateY(0deg); /* Flatten on hover/focus */
+        }
+
+        /* Layers */
+        .layer {
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transition: all 0.4s ease;
+            transform-style: preserve-3d;
+        }
+
+        /* Back Layer - Terminal/Output */
+        .layer-back {
+            transform: translateZ(-100px) scale(0.95);
+            background: #08090c;
+            opacity: 0.6;
+            z-index: 1;
+            display: flex;
+            align-items: flex-end;
+            padding: 20px;
+        }
+
+        /* Middle Layer - Secondary Panels */
+        .layer-mid {
+            transform: translateZ(0px);
+            z-index: 2;
+            display: flex;
+            pointer-events: none; /* Let clicks pass to main if needed, or handle layout */
+        }
+
+        .mid-panel {
+            pointer-events: auto;
+            background: rgba(30, 30, 40, 0.6);
+            border-right: 1px solid var(--border);
+            width: 250px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Front Layer - Main Editor */
+        .layer-front {
+            transform: translateZ(80px) scale(0.9);
+            z-index: 3;
+            left: 280px; /* Offset from sidebar */
+            top: 40px;
+            bottom: 40px;
+            right: 40px;
+            width: auto;
+            height: auto;
+            background: rgba(20, 20, 25, 0.85);
+            border: 1px solid rgba(112, 170, 255, 0.3);
+            box-shadow: 0 0 30px rgba(0,0,0,0.3);
+        }
+        
+        .layer-front:hover {
+            transform: translateZ(100px) scale(0.92);
+            border-color: var(--accent);
+            box-shadow: 0 0 50px rgba(112, 170, 255, 0.15);
+        }
+
+        /* Floating Widgets */
+        .widget {
+            position: absolute;
+            background: var(--accent);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 12px;
+            transform: translateZ(150px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 4;
+        }
+
+        .widget-status { bottom: 20px; right: 20px; }
+        .widget-ai { top: -10px; right: 50px; background: #fff; }
+
+        /* Content Styling */
+        h2 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #889; border-bottom: 1px solid var(--border); padding: 15px;}
+        
+        .file-tree { padding: 10px; list-style: none; margin: 0; }
+        .file-tree li { padding: 6px 10px; font-size: 13px; color: #aaa; cursor: pointer; border-radius: 4px; }
+        .file-tree li:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        .file-tree li.active { background: rgba(112, 170, 255, 0.15); color: var(--accent); }
+
+        .editor-area { padding: 30px; font-family: 'Courier New', Courier, monospace; color: #d0d0d0; line-height: 1.6; }
+        .ln { color: #445; margin-right: 15px; user-select: none; }
+        .k { color: #ff70a0; }
+        .f { color: #70aaff; }
+        .s { color: #a0ffa0; }
+
+        .terminal-log { width: 100%; font-family: monospace; font-size: 12px; color: #667; }
+
+    </style>
+</head>
+<body>
+
+    <div class="workspace">
+        
+        <!-- Back Layer: Terminal / Infrastructure -->
+        <div class="layer layer-back">
+            <div class="terminal-log">
+                > Service initializing...<br>
+                > Database connected (12ms)<br>
+                > Watching files...<br>
+                > Ready.
+            </div>
+        </div>
+
+        <!-- Middle Layer: Sidebar / Context -->
+        <div class="layer layer-mid">
+            <div class="mid-panel">
+                <h2>Project Files</h2>
+                <ul class="file-tree">
+                    <li class="active">app.tsx</li>
+                    <li>styles.css</li>
+                    <li>components/</li>
+                    <li>&nbsp;&nbsp;Button.tsx</li>
+                    <li>&nbsp;&nbsp;Header.tsx</li>
+                    <li>assets/</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Front Layer: Focus / Editor -->
+        <div class="layer layer-front">
+            <div class="editor-area">
+                <div><span class="ln">1</span><span class="k">import</span> React <span class="k">from</span> <span class="s">'react'</span>;</div>
+                <div><span class="ln">2</span></div>
+                <div><span class="ln">3</span><span class="k">export const</span> <span class="f">App</span> = () => {</div>
+                <div><span class="ln">4</span>&nbsp;&nbsp;<span class="k">return</span> (</div>
+                <div><span class="ln">5</span>&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="f">div</span> className=<span class="s">"depth-ui"</span>&gt;</div>
+                <div><span class="ln">6</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="f">h1</span>&gt;Hello World&lt;/<span class="f">h1</span>&gt;</div>
+                <div><span class="ln">7</span>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span class="f">div</span>&gt;</div>
+                <div><span class="ln">8</span>&nbsp;&nbsp;);</div>
+                <div><span class="ln">9</span>};</div>
+            </div>
+        </div>
+
+        <!-- Floating Widgets -->
+        <div class="widget widget-status">● Live</div>
+        <div class="widget widget-ai">AI Suggesting...</div>
+
+    </div>
+
+    <script>
+        // Simple parallax effect
+        document.addEventListener('mousemove', (e) => {
+            const x = (window.innerWidth / 2 - e.clientX) / 50;
+            const y = (window.innerHeight / 2 - e.clientY) / 50;
+            const ws = document.querySelector('.workspace');
+            ws.style.transform = `rotateX(${10 + y}deg) rotateY(${-5 + x}deg)`;
+        });
+    </script>
+</body>
+</html>

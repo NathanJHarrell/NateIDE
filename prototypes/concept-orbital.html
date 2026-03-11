@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OC - Orbital System v2.1 (Stability Patch)</title>
+    <style>
+        :root {
+            --core-radius: 260px;
+            --color-bg: #020308;
+            --color-core: #0a0c14;
+            --color-accent: #00f0ff;
+            --color-accent-dim: rgba(0, 240, 255, 0.3);
+            --color-danger: #ff0055;
+            --color-success: #00ffaa;
+            --font-main: 'Rajdhani', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --glass: rgba(15, 20, 30, 0.85);
+            --glass-border: rgba(0, 240, 255, 0.15);
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            height: 100vh;
+            width: 100vw;
+            background: var(--color-bg);
+            color: #fff;
+            font-family: var(--font-main);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 2000px;
+        }
+
+        #nebula-canvas {
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            opacity: 0.6;
+            filter: blur(40px);
+        }
+
+        .stars-overlay {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                radial-gradient(1px 1px at 20px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 90px 40px, var(--color-accent), rgba(0,0,0,0));
+            background-size: 200px 200px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        #system-root {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-style: preserve-3d;
+            transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 240, 255, 0.05);
+            pointer-events: none;
+            transition: all 0.8s ease;
+        }
+
+        .core-container {
+            width: calc(var(--core-radius) * 2);
+            height: calc(var(--core-radius) * 2);
+            position: relative;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .core-editor {
+            width: 100%;
+            height: 100%;
+            background: var(--color-core);
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            box-shadow: 
+                0 0 80px rgba(0, 0, 0, 0.9),
+                inset 0 0 40px rgba(0, 240, 255, 0.05);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            cursor: text;
+        }
+
+        .editor-view {
+            width: 80%;
+            height: 80%;
+            font-family: var(--font-mono);
+            font-size: 15px;
+            line-height: 1.6;
+            color: #aaddff;
+            mask-image: radial-gradient(circle, black 50%, transparent 95%);
+            -webkit-mask-image: radial-gradient(circle, black 50%, transparent 95%);
+            user-select: none;
+        }
+
+        .editor-line { display: flex; opacity: 0.8; margin-bottom: 2px; }
+        .editor-line .ln { color: #445566; min-width: 40px; text-align: right; margin-right: 20px; font-size: 12px; }
+        .kw { color: var(--color-danger); font-weight: bold; }
+        .fn { color: var(--color-accent); }
+        .str { color: var(--color-success); }
+        .punc { color: #667788; }
+
+        .arc-menu {
+            position: absolute;
+            width: 120%;
+            height: 120%;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .core-container:hover .arc-menu {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .arc-item {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8899aa;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .arc-item:hover {
+            color: #fff;
+            border-color: var(--color-accent);
+            box-shadow: 0 0 20px var(--color-accent-dim);
+            transform: scale(1.1);
+        }
+
+        /* --- SATELLITES (HORIZON LOCKED) --- */
+        .satellite {
+            position: absolute;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 16px;
+            min-width: 200px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: 
+                left 0.8s cubic-bezier(0.19, 1, 0.22, 1),
+                top 0.8s cubic-bezier(0.19, 1, 0.22, 1),
+                width 0.4s ease,
+                height 0.4s ease,
+                opacity 0.4s ease,
+                transform 0.3s ease;
+            cursor: pointer;
+            z-index: 50;
+            /* HORIZON LOCK: No rotation */
+            transform: rotate(0deg);
+        }
+
+        .satellite:hover {
+            border-color: var(--color-accent);
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.15);
+            z-index: 200;
+            transform: translateY(-5px);
+        }
+
+        .satellite.focused {
+            min-width: 450px;
+            border-color: var(--color-accent);
+            z-index: 300;
+            transform: scale(1.05);
+        }
+
+        .sat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 8px;
+        }
+
+        .sat-header h3 {
+            margin: 0;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #8899aa;
+        }
+
+        .sat-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--color-success);
+            box-shadow: 0 0 8px var(--color-success);
+        }
+
+        .sat-content {
+            font-size: 13px;
+            color: #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        .hud-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .hud-top {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .hud-unit { text-align: center; }
+        .hud-label { font-size: 10px; color: #556677; text-transform: uppercase; letter-spacing: 2px; }
+        .hud-value { font-size: 18px; color: #fff; font-weight: 700; }
+
+        .hud-bottom {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .galaxy-toggle {
+            pointer-events: auto;
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: #8899aa;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .galaxy-toggle:hover {
+            color: var(--color-accent);
+            border-color: var(--color-accent);
+            background: rgba(0, 240, 255, 0.05);
+        }
+
+        #streams-svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .galaxy-mode #system-root { transform: scale(0.3) rotateX(45deg); }
+        .galaxy-mode .ring { opacity: 0.1; }
+        .galaxy-mode .satellite { opacity: 0.4; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="nebula-canvas"></canvas>
+    <div class="stars-overlay"></div>
+    <svg id="streams-svg"></svg>
+
+    <div id="system-root">
+        <div class="core-container">
+            <div class="arc-menu" id="arc-menu">
+                <div class="arc-item" data-angle="-90">Run</div>
+                <div class="arc-item" data-angle="-45">Debug</div>
+                <div class="arc-item" data-angle="0">Ship</div>
+                <div class="arc-item" data-angle="45">Logs</div>
+                <div class="arc-item" data-angle="90">Config</div>
+                <div class="arc-item" data-angle="180">Sync</div>
+            </div>
+
+            <div class="core-editor" id="core-editor">
+                <div class="editor-view">
+                    <div class="editor-line"><span class="ln">1</span><span class="kw">async function</span> <span class="fn">orchestrate</span><span class="punc">(</span>sys<span class="punc">)</span> <span class="punc">{</span></div>
+                    <div class="editor-line"><span class="ln">2</span>&nbsp;&nbsp;<span class="kw">const</span> core <span class="punc">=</span> <span class="kw">await</span> sys.<span class="fn">boot</span><span class="punc">();</span></div>
+                    <div class="editor-line"><span class="ln">3</span>&nbsp;&nbsp;core.<span class="fn">establishOrbit</span><span class="punc">({</span></div>
+                    <div class="editor-line"><span class="ln">4</span>&nbsp;&nbsp;&nbsp;&nbsp;gravity: <span class="str">"high"</span><span class="punc">,</span></div>
+                    <div class="editor-line"><span class="ln">5</span>&nbsp;&nbsp;&nbsp;&nbsp;noise: <span class="kw">false</span></div>
+                    <div class="editor-line"><span class="ln">6</span>&nbsp;&nbsp;<span class="punc">});</span></div>
+                    <div class="editor-line"><span class="ln">7</span>&nbsp;&nbsp;<span class="kw">return</span> <span class="fn">Core</span>.<span class="fn">READY</span><span class="punc">;</span></div>
+                    <div class="editor-line"><span class="ln">8</span><span class="punc">}</span></div>
+                    <div class="editor-line"><span class="ln">9</span></div>
+                    <div class="editor-line"><span class="ln">10</span><span class="kw">export default</span> orchestrate<span class="punc">;</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hud-overlay">
+        <div class="hud-top">
+            <div class="hud-unit"><div class="hud-label">Project</div><div class="hud-value">ORBITAL_OS</div></div>
+            <div class="hud-unit"><div class="hud-label">Complexity</div><div class="hud-value" style="color: var(--color-success);">OPTIMAL</div></div>
+            <div class="hud-unit"><div class="hud-label">AI Sync</div><div class="hud-value">ACTIVE</div></div>
+        </div>
+        <div class="hud-bottom">
+            <div class="hud-unit" style="text-align: left;"><div class="hud-label">System State</div><div class="hud-value">v2.1.0-FIXED</div></div>
+            <button class="galaxy-toggle" id="galaxy-btn">GALAXY VIEW (TAB)</button>
+        </div>
+    </div>
+
+    <script>
+        const systemRoot = document.getElementById('system-root');
+        const galaxyBtn = document.getElementById('galaxy-btn');
+        const coreEditor = document.getElementById('core-editor');
+
+        const SATELLITES = [
+            { id: 'files', name: 'Explorer', orbitX: 450, orbitY: 300, angle: 160, content: '<ul><li>app.ts</li><li>router.ts</li><li>ui/core.tsx</li></ul>' },
+            { id: 'git', name: 'Source', orbitX: 450, orbitY: 300, angle: -20, content: '<div>+ 14 staged changes</div><div style="color:#556677">Last commit 2h ago</div>' },
+            { id: 'ai', name: 'Assistant', orbitX: 680, orbitY: 420, angle: 60, content: '<div>Refactoring complete.</div><div style="color:var(--color-accent)">Suggestion: Use hooks.</div>' },
+            { id: 'term', name: 'Terminal', orbitX: 680, orbitY: 420, angle: 220, content: '<div style="color:#00ffaa">$ npm run dev</div><div>[Server] Ready at :3000</div>' },
+            { id: 'perf', name: 'Performance', orbitX: 680, orbitY: 420, angle: -80, content: '<div>Mem: 142MB</div><div>CPU: 4%</div>' }
+        ];
+
+        let state = {
+            time: 0,
+            galaxyMode: false,
+            focusedSat: null,
+            screenW: window.innerWidth,
+            screenH: window.innerHeight
+        };
+
+        window.addEventListener('resize', () => {
+            state.screenW = window.innerWidth;
+            state.screenH = window.innerHeight;
+        });
+
+        const satElements = SATELLITES.map(config => {
+            const el = document.createElement('div');
+            el.className = 'satellite';
+            el.id = `sat-${config.id}`;
+            el.innerHTML = `
+                <div class="sat-header"><h3>${config.name}</h3><div class="sat-status"></div></div>
+                <div class="sat-content">${config.content}</div>
+            `;
+            systemRoot.appendChild(el);
+            el.addEventListener('click', (e) => { e.stopPropagation(); toggleFocus(config, el); });
+            return { ...config, el };
+        });
+
+        function toggleFocus(config, el) {
+            if (state.focusedSat === config.id) {
+                state.focusedSat = null;
+                el.classList.remove('focused');
+            } else {
+                satElements.forEach(s => s.el.classList.remove('focused'));
+                state.focusedSat = config.id;
+                el.classList.add('focused');
+            }
+        }
+
+        function update() {
+            state.time += 0.0012; // Slow drift for readability
+            const centerX = state.screenW / 2;
+            const centerY = state.screenH / 2;
+
+            satElements.forEach(sat => {
+                // Safety Margins
+                const marginX = 180;
+                const marginY = 120;
+                const maxOrbitX = Math.max(200, (state.screenW / 2) - marginX);
+                const maxOrbitY = Math.max(150, (state.screenH / 2) - marginY);
+
+                let currentOrbitX = Math.min(sat.orbitX, maxOrbitX);
+                let currentOrbitY = Math.min(sat.orbitY, maxOrbitY);
+                
+                const speed = 40 / (sat.orbitX + sat.orbitY);
+                let currentAngle = (sat.angle * Math.PI / 180) + state.time * speed;
+
+                if (state.focusedSat === sat.id) {
+                    currentOrbitX = 280; 
+                    currentOrbitY = 180;
+                } else if (state.focusedSat) {
+                    currentOrbitX += 100;
+                    currentOrbitY += 80;
+                }
+
+                const x = Math.cos(currentAngle) * currentOrbitX;
+                const y = Math.sin(currentAngle) * currentOrbitY;
+
+                sat.el.style.left = `${centerX + x - sat.el.offsetWidth / 2}px`;
+                sat.el.style.top = `${centerY + y - sat.el.offsetHeight / 2}px`;
+                // ENFORCE HORIZON LOCK
+                sat.el.style.transform = `rotate(0deg)`;
+            });
+
+            requestAnimationFrame(update);
+        }
+
+        function initArcMenu() {
+            const items = document.querySelectorAll('.arc-item');
+            items.forEach(item => {
+                const angle = parseInt(item.dataset.angle) - 90;
+                const rad = angle * Math.PI / 180;
+                const r = 290;
+                const x = Math.cos(rad) * r + 260;
+                const y = Math.sin(rad) * r + 260;
+                item.style.left = `${x - 25}px`;
+                item.style.top = `${y - 25}px`;
+            });
+        }
+
+        function initNebula() {
+            const canvas = document.getElementById('nebula-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = state.screenW;
+            canvas.height = state.screenH;
+            function draw() {
+                ctx.clearRect(0,0, canvas.width, canvas.height);
+                const t = Date.now() * 0.0001;
+                const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width);
+                grad.addColorStop(0, 'rgba(0, 240, 255, 0.08)');
+                grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0,0, canvas.width, canvas.height);
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        galaxyBtn.addEventListener('click', () => {
+            state.galaxyMode = !state.galaxyMode;
+            document.body.classList.toggle('galaxy-mode', state.galaxyMode);
+        });
+
+        initArcMenu();
+        initNebula();
+        update();
+    </script>
+</body>
+</html>

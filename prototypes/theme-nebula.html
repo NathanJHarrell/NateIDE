@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Nebula</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; }
+  body { height: 100vh; overflow: hidden; background: #000; color: #c8cce0; font-family: "Space Grotesk", system-ui; font-size: 13px; }
+
+  #bg { position: fixed; inset: 0; z-index: 0; }
+
+  .shell { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+  .sidebar {
+    width: 230px; padding: 20px; display: flex; flex-direction: column; gap: 4px;
+    background: rgba(8, 6, 20, 0.7); backdrop-filter: blur(30px) saturate(1.4);
+    border-right: 1px solid rgba(140, 120, 255, 0.08);
+  }
+  .sidebar h3 {
+    margin: 0 0 12px; font-size: 9px; text-transform: uppercase;
+    letter-spacing: 3px; font-weight: 700;
+    background: linear-gradient(90deg, #c084fc, #818cf8, #38bdf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sidebar-item {
+    padding: 9px 14px; border-radius: 10px; cursor: pointer; font-size: 13px;
+    transition: all 0.3s; font-weight: 500; border: 1px solid transparent;
+  }
+  .sidebar-item:hover { background: rgba(140, 120, 255, 0.06); }
+  .sidebar-item.active {
+    background: rgba(140, 120, 255, 0.1);
+    border-color: rgba(140, 120, 255, 0.15);
+    color: #e0d4ff;
+    box-shadow: 0 0 30px rgba(140, 100, 255, 0.06);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 10px; box-shadow: 0 0 10px currentColor, 0 0 3px currentColor; }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+  .toolbar {
+    padding: 10px 24px; display: flex; gap: 10px; align-items: center;
+    background: rgba(8, 6, 20, 0.6); backdrop-filter: blur(30px);
+    border-bottom: 1px solid rgba(140, 120, 255, 0.06);
+  }
+  .toolbar-title {
+    font-weight: 700; font-size: 15px;
+    background: linear-gradient(135deg, #e0aaff, #818cf8, #38bdf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .session { font-size: 11px; color: #5a5880; margin-left: auto; font-family: "JetBrains Mono", monospace; }
+
+  .btn {
+    padding: 6px 16px; border-radius: 10px; border: 1px solid rgba(140, 120, 255, 0.12);
+    background: rgba(20, 16, 40, 0.6); color: #a0a0c8; font-size: 12px;
+    cursor: pointer; transition: all 0.25s; font-family: "Space Grotesk"; font-weight: 500;
+    backdrop-filter: blur(8px);
+  }
+  .btn:hover { border-color: rgba(160, 140, 255, 0.3); color: #d0ccff; box-shadow: 0 0 16px rgba(140, 100, 255, 0.08); }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(140, 100, 255, 0.3), rgba(80, 140, 255, 0.2));
+    border-color: rgba(160, 140, 255, 0.2); color: #d8d0ff;
+  }
+
+  .content { flex: 1; padding: 28px; overflow: auto; }
+  .sender { font-size: 10px; color: #4a4870; margin-bottom: 4px; font-family: "JetBrains Mono", monospace; letter-spacing: 0.5px; text-transform: uppercase; }
+  .bubble {
+    border-radius: 16px; padding: 14px 18px; margin: 6px 0; max-width: 72%;
+    font-size: 13px; line-height: 1.65;
+    background: rgba(16, 12, 30, 0.6); border: 1px solid rgba(140, 120, 255, 0.06);
+    backdrop-filter: blur(12px);
+  }
+  .bubble.user {
+    margin-left: auto;
+    background: linear-gradient(135deg, rgba(140, 100, 255, 0.15), rgba(80, 60, 200, 0.1));
+    border-color: rgba(160, 140, 255, 0.12);
+    color: #d8d4f0;
+  }
+  .card {
+    border-radius: 14px; padding: 16px 18px; margin: 14px 0;
+    background: rgba(16, 12, 30, 0.5); border: 1px solid rgba(140, 120, 255, 0.06);
+    backdrop-filter: blur(12px);
+    border-left: 3px solid; border-image: linear-gradient(180deg, #c084fc, #38bdf8) 1;
+  }
+  .card-title { font-weight: 700; color: #d0ccf0; margin-bottom: 4px; }
+  .card-sub { color: #5a5880; font-size: 12px; }
+
+  .tags { margin: 16px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .tag-r { background: rgba(248,113,133,0.1); color: #fb7185; border: 1px solid rgba(248,113,133,0.12); }
+  .tag-y { background: rgba(251,191,36,0.08); color: #fbbf24; border: 1px solid rgba(251,191,36,0.1); }
+  .tag-b { background: rgba(129,140,248,0.1); color: #818cf8; border: 1px solid rgba(129,140,248,0.12); }
+  .tag-g { background: rgba(52,211,153,0.1); color: #34d399; border: 1px solid rgba(52,211,153,0.12); }
+
+  .footer { font-size: 10px; color: #3d3a60; margin-top: 6px; font-family: "JetBrains Mono", monospace; }
+
+  .input-wrap { margin-top: 24px; position: relative; }
+  .input-wrap::before {
+    content: ''; position: absolute; inset: -1px; border-radius: 15px; z-index: -1;
+    background: linear-gradient(135deg, rgba(192,132,252,0.15), rgba(56,189,248,0.1), rgba(232,121,249,0.1));
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .input-wrap:focus-within::before { opacity: 1; }
+  input {
+    padding: 14px 20px; border-radius: 14px; border: 1px solid rgba(140, 120, 255, 0.08);
+    background: rgba(8, 6, 20, 0.7); color: #c8cce0; width: 100%;
+    font-family: "Space Grotesk"; font-size: 13px; backdrop-filter: blur(16px);
+  }
+  input:focus {
+    outline: none; border-color: rgba(160, 140, 255, 0.2);
+    box-shadow: 0 0 30px rgba(140, 100, 255, 0.06);
+  }
+
+  .label {
+    position: fixed; top: 14px; right: 18px; z-index: 10;
+    background: rgba(8, 6, 20, 0.8); backdrop-filter: blur(20px);
+    border: 1px solid rgba(192,132,252,0.2); padding: 6px 16px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; color: #c084fc;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(140,120,255,0.12); border-radius: 2px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<div id="bg"></div>
+<div class="label">Nebula</div>
+<div class="shell">
+  <div class="sidebar">
+    <h3>Agents</h3>
+    <div class="sidebar-item active"><span class="dot" style="background:#c084fc;color:#c084fc"></span>Controller</div>
+    <div class="sidebar-item"><span class="dot" style="background:#fb923c;color:#fb923c"></span>Codex</div>
+    <div class="sidebar-item"><span class="dot" style="background:#e879f9;color:#e879f9"></span>Gemini</div>
+    <div class="sidebar-item"><span class="dot" style="background:#34d399;color:#34d399"></span>Kimi</div>
+    <h3 style="margin-top:24px">Pipelines</h3>
+    <div class="sidebar-item">Review Pipeline</div>
+    <div class="sidebar-item">Deploy Pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span class="session">4,231 tkn &middot; $0.12</span>
+      <button class="btn">Settings</button>
+      <button class="btn btn-primary">New Chat</button>
+    </div>
+    <div class="content">
+      <div class="sender">nate</div>
+      <div class="bubble user">Analyze the auth module for security issues</div>
+      <div class="sender" style="margin-top:18px"><span class="dot" style="background:#e879f9;color:#e879f9;width:6px;height:6px"></span> agent-gemini</div>
+      <div class="bubble">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="footer">274 in / 156 out (~$0.003)</div>
+      <div class="tags">
+        <span class="tag tag-r">security</span>
+        <span class="tag tag-y">needs-review</span>
+        <span class="tag tag-b">auth</span>
+        <span class="tag tag-g">completed</span>
+      </div>
+      <div class="card">
+        <div class="card-title">Task: Fix JWT Expiry</div>
+        <div class="card-sub">Assigned to Codex &middot; Priority: High</div>
+      </div>
+      <div class="input-wrap">
+        <input placeholder="Message your agents... (@mention to route)" />
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 3;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.getElementById('bg').appendChild(renderer.domElement);
+
+// Nebula cloud particles
+const count = 1200;
+const positions = new Float32Array(count * 3);
+const colors = new Float32Array(count * 3);
+const sizes = new Float32Array(count);
+
+const palette = [
+  [0.75, 0.52, 0.99],  // purple
+  [0.51, 0.55, 0.97],  // indigo
+  [0.22, 0.74, 0.97],  // cyan
+  [0.91, 0.47, 0.95],  // pink
+  [0.20, 0.83, 0.60],  // teal
+];
+
+for (let i = 0; i < count; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 1.5 + Math.random() * 2.5;
+  positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+  positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+  positions[i * 3 + 2] = r * Math.cos(phi);
+
+  const c = palette[Math.floor(Math.random() * palette.length)];
+  colors[i * 3] = c[0];
+  colors[i * 3 + 1] = c[1];
+  colors[i * 3 + 2] = c[2];
+
+  sizes[i] = Math.random() * 2 + 0.5;
+}
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+const mat = new THREE.ShaderMaterial({
+  vertexShader: `
+    attribute float size;
+    varying vec3 vColor;
+    void main() {
+      vColor = color;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (200.0 / -mvPosition.z);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      float alpha = smoothstep(0.5, 0.0, d) * 0.3;
+      gl_FragColor = vec4(vColor, alpha);
+    }
+  `,
+  transparent: true,
+  vertexColors: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+
+const points = new THREE.Points(geo, mat);
+scene.add(points);
+
+// Nebula glow core
+const glowGeo = new THREE.SphereGeometry(0.8, 32, 32);
+const glowMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vNormal;
+    uniform float time;
+    void main() {
+      float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
+      vec3 color = mix(vec3(0.5, 0.2, 1.0), vec3(0.2, 0.6, 1.0), sin(time * 0.3) * 0.5 + 0.5);
+      gl_FragColor = vec4(color, intensity * 0.2);
+    }
+  `,
+  uniforms: { time: { value: 0 } },
+  transparent: true,
+  side: THREE.BackSide,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+scene.add(new THREE.Mesh(glowGeo, glowMat));
+
+function animate(t) {
+  requestAnimationFrame(animate);
+  const time = t * 0.001;
+  points.rotation.y = time * 0.012;
+  points.rotation.x = Math.sin(time * 0.008) * 0.06;
+  glowMat.uniforms.time.value = time;
+  renderer.render(scene, camera);
+}
+animate(0);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

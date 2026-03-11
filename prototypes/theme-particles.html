@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Particle Network</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root {
+    --color-background: #06080d;
+    --color-surface: rgba(12, 16, 24, 0.9);
+    --color-surface-alt: rgba(18, 24, 36, 0.85);
+    --color-ink: #b0b8c8;
+    --color-muted: #4a5568;
+    --color-accent: #38bdf8;
+    --color-border: rgba(56, 189, 248, 0.1);
+    --color-success: #22d3ee;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --panel-radius: 10px;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-size: 13px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: linear-gradient(145deg, #0a0c12, #06080d 40%, #0d0f16 70%, #080a10);
+    color: var(--color-ink);
+  }
+
+  #particles { position: fixed; inset: 0; z-index: 0; }
+
+  .preview { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+  .sidebar {
+    width: 230px;
+    background: linear-gradient(180deg, rgba(22, 26, 40, 0.94), rgba(10, 13, 20, 0.92));
+    border-right: 1px solid var(--color-border);
+    padding: 16px; display: flex; flex-direction: column; gap: 6px;
+    backdrop-filter: blur(16px);
+  }
+  .sidebar h3 {
+    margin: 0 0 10px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 3px; font-weight: 600; color: var(--color-accent);
+  }
+  .sidebar-item {
+    padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    transition: all 0.25s; border: 1px solid transparent;
+  }
+  .sidebar-item:hover {
+    background: rgba(56, 189, 248, 0.05);
+    border-color: rgba(56, 189, 248, 0.1);
+  }
+  .sidebar-item.active {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.2);
+    color: var(--color-accent);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.05), inset 0 0 20px rgba(56, 189, 248, 0.03);
+  }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+
+  .toolbar {
+    padding: 10px 20px; border-bottom: 1px solid var(--color-border);
+    display: flex; gap: 8px; align-items: center;
+    background: linear-gradient(90deg, rgba(22, 26, 40, 0.92), rgba(12, 15, 24, 0.88));
+    backdrop-filter: blur(16px);
+  }
+  .toolbar-title {
+    font-weight: 700; font-size: 15px; color: #e2e8f0;
+    letter-spacing: -0.3px;
+  }
+
+  .btn {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--color-border);
+    background: rgba(12, 16, 24, 0.8); color: var(--color-ink); font-size: 12px;
+    cursor: pointer; transition: all 0.25s; font-family: "Space Grotesk";
+  }
+  .btn:hover {
+    border-color: rgba(56, 189, 248, 0.3);
+    color: var(--color-accent);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.06);
+  }
+  .btn-primary {
+    background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.25);
+    color: var(--color-accent);
+  }
+  .btn-primary:hover {
+    background: rgba(56, 189, 248, 0.18);
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.1);
+  }
+
+  .content {
+    flex: 1; padding: 24px; overflow: auto;
+  }
+
+  .chat-sender {
+    font-size: 11px; color: var(--color-muted); margin-bottom: 4px;
+    font-family: "JetBrains Mono", monospace; letter-spacing: 0.5px;
+  }
+  .chat-bubble {
+    background: var(--color-surface-alt); border-radius: 12px; padding: 12px 16px;
+    margin: 6px 0; max-width: 75%; font-size: 13px; line-height: 1.6;
+    border: 1px solid var(--color-border); backdrop-filter: blur(8px);
+  }
+  .chat-bubble.user {
+    margin-left: auto;
+    background: rgba(56, 189, 248, 0.06);
+    border-color: rgba(56, 189, 248, 0.15);
+    color: #e2e8f0;
+  }
+
+  .card {
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--panel-radius); padding: 16px; margin-bottom: 12px;
+    backdrop-filter: blur(8px); position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--color-accent), var(--color-success));
+  }
+  .card-title { font-weight: 600; margin-bottom: 4px; color: #e2e8f0; padding-left: 8px; }
+  .card-sub { color: var(--color-muted); font-size: 12px; padding-left: 8px; }
+
+  .tag {
+    display: inline-block; padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .tag-red { background: rgba(239,68,68,0.1); color: #ef4444; }
+  .tag-yellow { background: rgba(245,158,11,0.1); color: #f59e0b; }
+  .tag-blue { background: rgba(56,189,248,0.1); color: #38bdf8; }
+  .tag-green { background: rgba(34,211,238,0.1); color: #22d3ee; }
+
+  .input {
+    padding: 10px 14px; border-radius: 8px; border: 1px solid var(--color-border);
+    background: rgba(6, 8, 13, 0.8); color: var(--color-ink); width: 100%;
+    font-family: "Space Grotesk"; backdrop-filter: blur(8px);
+  }
+  .input:focus {
+    outline: none; border-color: rgba(56, 189, 248, 0.3);
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.06);
+  }
+  .input::placeholder { color: #2d3748; }
+
+  .token-footer { font-size: 10px; color: var(--color-muted); margin-top: 4px; font-family: "JetBrains Mono", monospace; }
+  .agent-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px currentColor, 0 0 3px currentColor; }
+  .session-bar { font-size: 11px; color: var(--color-muted); margin-left: auto; font-family: "JetBrains Mono", monospace; }
+
+  .theme-label {
+    position: fixed; top: 12px; right: 16px; z-index: 10;
+    background: rgba(6, 8, 13, 0.9); backdrop-filter: blur(12px);
+    border: 1px solid rgba(56, 189, 248, 0.2); padding: 6px 16px; border-radius: 6px;
+    font-size: 12px; font-weight: 600; color: var(--color-accent);
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(56,189,248,0.3); }
+</style>
+</head>
+<body>
+<canvas id="particles"></canvas>
+<div class="theme-label">Particle Network</div>
+<div class="preview">
+  <div class="sidebar">
+    <h3>Agents</h3>
+    <div class="sidebar-item active"><span class="agent-dot" style="background:#38bdf8;color:#38bdf8"></span>Controller</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#fb923c;color:#fb923c"></span>Codex</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#a78bfa;color:#a78bfa"></span>Gemini</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#22d3ee;color:#22d3ee"></span>Kimi</div>
+    <h3 style="margin-top:20px">Pipelines</h3>
+    <div class="sidebar-item">Review Pipeline</div>
+    <div class="sidebar-item">Deploy Pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span class="session-bar">4,231 tkn &middot; $0.12</span>
+      <button class="btn">Settings</button>
+      <button class="btn btn-primary">New Chat</button>
+    </div>
+    <div class="content">
+      <div class="chat-sender">nate</div>
+      <div class="chat-bubble user">Analyze the auth module for security issues</div>
+      <div class="chat-sender" style="margin-top:16px"><span class="agent-dot" style="background:#a78bfa;color:#a78bfa"></span>agent-gemini</div>
+      <div class="chat-bubble">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="token-footer">274 in / 156 out (~$0.003)</div>
+      <div style="margin:16px 0; display:flex; gap:6px; flex-wrap:wrap">
+        <span class="tag tag-red">security</span>
+        <span class="tag tag-yellow">needs-review</span>
+        <span class="tag tag-blue">auth</span>
+        <span class="tag tag-green">completed</span>
+      </div>
+      <div class="card">
+        <div class="card-title">Task: Fix JWT Expiry</div>
+        <div class="card-sub">Assigned to Codex &middot; Priority: High</div>
+      </div>
+      <div style="margin-top:20px">
+        <input class="input" placeholder="Message your agents..." />
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+let w, h;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const colors = [
+  { r: 56, g: 189, b: 248 },   // cyan
+  { r: 167, g: 139, b: 250 },  // purple
+  { r: 52, g: 211, b: 153 },   // emerald
+  { r: 251, g: 146, b: 60 },   // orange
+  { r: 244, g: 114, b: 182 },  // pink
+];
+
+// Hexagonal path: 6 vertices of a hexagon
+function hexPoint(cx, cy, radius, vertex) {
+  const angle = (Math.PI / 3) * vertex - Math.PI / 2;
+  return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+}
+
+class Particle {
+  constructor() {
+    this.cx = Math.random() * w;
+    this.cy = Math.random() * h;
+    this.orbitRadius = Math.random() * 30 + 15;
+    this.r = Math.random() * 2.5 + 1.5;
+    this.color = colors[Math.floor(Math.random() * colors.length)];
+    this.pulseOffset = Math.random() * Math.PI * 2;
+    this.pulseSpeed = Math.random() * 0.008 + 0.003;
+    // Hex traversal — varied but capped speeds
+    this.vertex = Math.floor(Math.random() * 6);
+    this.t = Math.random();
+    this.speed = Math.random() * 0.004 + 0.0008; // 0.0008 to 0.0048
+    this.direction = Math.random() > 0.5 ? 1 : -1;
+    // Trail
+    this.trail = [];
+    this.trailLen = 18;
+    this.update(0);
+  }
+  update(time) {
+    this.t += this.speed;
+    if (this.t >= 1) {
+      this.t -= 1;
+      this.vertex = (this.vertex + this.direction + 6) % 6;
+    }
+    const from = hexPoint(this.cx, this.cy, this.orbitRadius, this.vertex);
+    const toV = (this.vertex + this.direction + 6) % 6;
+    const to = hexPoint(this.cx, this.cy, this.orbitRadius, toV);
+    this.x = from.x + (to.x - from.x) * this.t;
+    this.y = from.y + (to.y - from.y) * this.t;
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > this.trailLen) this.trail.shift();
+  }
+}
+
+const particles = Array.from({ length: 50 }, () => new Particle());
+
+function draw(time) {
+  ctx.clearRect(0, 0, w, h);
+
+  for (const p of particles) p.update(time);
+
+  // Draw trails — fades out along the hex path behind the particle
+  for (const p of particles) {
+    if (p.trail.length < 2) continue;
+    for (let i = 1; i < p.trail.length; i++) {
+      const t = i / p.trail.length;
+      ctx.beginPath();
+      ctx.moveTo(p.trail[i - 1].x, p.trail[i - 1].y);
+      ctx.lineTo(p.trail[i].x, p.trail[i].y);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${t * 0.4})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+  }
+
+  // Draw connections to 2 nearest
+  for (const p of particles) {
+    let nearest = [];
+    for (const q of particles) {
+      if (q === p) continue;
+      const dx = p.x - q.x;
+      const dy = p.y - q.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 180) nearest.push({ q, dist });
+    }
+    nearest.sort((a, b) => a.dist - b.dist);
+    for (let i = 0; i < Math.min(2, nearest.length); i++) {
+      const { q, dist } = nearest[i];
+      const alpha = (1 - dist / 180) * 0.06;
+      const grad = ctx.createLinearGradient(p.x, p.y, q.x, q.y);
+      grad.addColorStop(0, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${alpha})`);
+      grad.addColorStop(1, `rgba(${q.color.r}, ${q.color.g}, ${q.color.b}, ${alpha})`);
+      ctx.beginPath();
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 0.4;
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(q.x, q.y);
+      ctx.stroke();
+    }
+  }
+
+  // Draw particles with pulse glow
+  for (const p of particles) {
+    const pulse = Math.sin(time * p.pulseSpeed + p.pulseOffset);
+    const alpha = 0.4 + pulse * 0.2;
+    const glowR = p.r + pulse * 2 + 3;
+
+    // Outer glow
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${alpha * 0.1})`;
+    ctx.fill();
+
+    // Core
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${alpha})`;
+    ctx.fill();
+  }
+
+  requestAnimationFrame(draw);
+}
+draw(0);
+</script>
+</body>
+</html>

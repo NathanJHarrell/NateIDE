@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "paths": {
+      "@nateide/agents": ["packages/agents/src/index.ts"],
+      "@nateide/orchestrator": ["packages/orchestrator/src/index.ts"],
+      "@nateide/protocol": ["packages/protocol/src/index.ts"],
+      "@nateide/ui": ["packages/ui/src/index.ts"],
+      "@nateide/workspace": ["packages/workspace/src/index.ts"],
+      "@nateide/harness": ["packages/harness/src/index.ts"],
+      "@nateide/mcp-client": ["packages/mcp-client/src/index.ts"]
+    }
+  }
+}

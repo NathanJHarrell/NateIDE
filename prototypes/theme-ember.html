@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Ember</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  :root {
+    --color-background: #0c0a09;
+    --color-surface: rgba(20, 16, 14, 0.92);
+    --color-surface-alt: rgba(32, 26, 22, 0.88);
+    --color-ink: #d4c4b0;
+    --color-muted: #6b5c4f;
+    --color-accent: #f97316;
+    --color-border: rgba(251, 146, 60, 0.12);
+    --color-success: #84cc16;
+    --color-warning: #eab308;
+    --color-error: #ef4444;
+    --panel-radius: 8px;
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 13px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: var(--color-background); color: var(--color-ink);
+  }
+
+  /* Animated ember glow */
+  .ember-bg {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  }
+  .ember-orb {
+    position: absolute; border-radius: 50%; filter: blur(80px);
+  }
+  .ember-orb:nth-child(1) {
+    width: 400px; height: 400px; top: -100px; left: 10%;
+    background: radial-gradient(circle, rgba(249,115,22,0.12), transparent 70%);
+    animation: float1 18s ease-in-out infinite;
+  }
+  .ember-orb:nth-child(2) {
+    width: 300px; height: 300px; bottom: -50px; right: 15%;
+    background: radial-gradient(circle, rgba(239,68,68,0.08), transparent 70%);
+    animation: float2 22s ease-in-out infinite;
+  }
+  .ember-orb:nth-child(3) {
+    width: 250px; height: 250px; top: 40%; left: 50%;
+    background: radial-gradient(circle, rgba(234,179,8,0.06), transparent 70%);
+    animation: float3 15s ease-in-out infinite;
+  }
+  @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(40px, 30px); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-30px, -40px); } }
+  @keyframes float3 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(20px, -20px); } }
+
+  /* Subtle noise texture */
+  .ember-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity: 0.5;
+  }
+
+  .preview { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+  .sidebar {
+    width: 230px; background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    padding: 16px; display: flex; flex-direction: column; gap: 6px;
+    backdrop-filter: blur(20px);
+  }
+  .sidebar h3 {
+    margin: 0 0 10px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 2.5px; font-weight: 700; color: var(--color-accent);
+  }
+  .sidebar-item {
+    padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    transition: all 0.2s; font-weight: 500;
+  }
+  .sidebar-item:hover { background: rgba(249,115,22,0.06); }
+  .sidebar-item.active {
+    background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(234,179,8,0.08));
+    border: 1px solid rgba(249,115,22,0.2);
+    color: var(--color-accent);
+  }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+
+  .toolbar {
+    padding: 10px 20px; border-bottom: 1px solid var(--color-border);
+    display: flex; gap: 8px; align-items: center;
+    background: var(--color-surface); backdrop-filter: blur(20px);
+  }
+  .toolbar-title {
+    font-weight: 700; font-size: 15px;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .btn {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--color-border);
+    background: rgba(20, 16, 14, 0.8); color: var(--color-ink); font-size: 12px;
+    cursor: pointer; transition: all 0.2s; font-family: "DM Sans"; font-weight: 500;
+  }
+  .btn:hover { border-color: rgba(249,115,22,0.3); color: var(--color-accent); }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(249,115,22,0.25), rgba(234,179,8,0.15));
+    border-color: rgba(249,115,22,0.3); color: var(--color-accent);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(249,115,22,0.35), rgba(234,179,8,0.2));
+    box-shadow: 0 0 20px rgba(249,115,22,0.1);
+  }
+
+  .content { flex: 1; padding: 24px; overflow: auto; }
+
+  .chat-sender {
+    font-size: 11px; color: var(--color-muted); margin-bottom: 4px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .chat-bubble {
+    background: var(--color-surface-alt); border-radius: 10px; padding: 12px 16px;
+    margin: 6px 0; max-width: 75%; font-size: 13px; line-height: 1.6;
+    border: 1px solid var(--color-border); backdrop-filter: blur(8px);
+  }
+  .chat-bubble.user {
+    margin-left: auto;
+    background: linear-gradient(135deg, rgba(249,115,22,0.12), rgba(234,88,12,0.08));
+    border-color: rgba(249,115,22,0.2);
+    color: #f5e6d3;
+  }
+
+  .card {
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--panel-radius); padding: 16px; margin-bottom: 12px;
+    backdrop-filter: blur(8px);
+  }
+  .card::before { display: none; }
+  .card-title {
+    font-weight: 700; margin-bottom: 4px; color: #f5e6d3;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title::before {
+    content: ''; width: 4px; height: 16px; border-radius: 2px;
+    background: linear-gradient(180deg, #f97316, #eab308);
+  }
+  .card-sub { color: var(--color-muted); font-size: 12px; padding-left: 12px; }
+
+  .tag {
+    display: inline-block; padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; font-weight: 600;
+  }
+  .tag-red { background: rgba(239,68,68,0.12); color: #f87171; }
+  .tag-yellow { background: rgba(234,179,8,0.12); color: #facc15; }
+  .tag-blue { background: rgba(56,189,248,0.1); color: #38bdf8; }
+  .tag-green { background: rgba(132,204,22,0.12); color: #a3e635; }
+
+  .input {
+    padding: 10px 14px; border-radius: 8px; border: 1px solid var(--color-border);
+    background: rgba(12, 10, 9, 0.8); color: var(--color-ink); width: 100%;
+    font-family: "DM Sans"; backdrop-filter: blur(8px);
+  }
+  .input:focus {
+    outline: none; border-color: rgba(249,115,22,0.3);
+    box-shadow: 0 0 20px rgba(249,115,22,0.06);
+  }
+
+  .token-footer { font-size: 10px; color: var(--color-muted); margin-top: 4px; font-family: "JetBrains Mono", monospace; }
+  .agent-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 6px currentColor; }
+  .session-bar { font-size: 11px; color: var(--color-muted); margin-left: auto; font-family: "JetBrains Mono", monospace; }
+
+  .theme-label {
+    position: fixed; top: 12px; right: 16px; z-index: 10;
+    background: rgba(12, 10, 9, 0.9); backdrop-filter: blur(12px);
+    border: 1px solid rgba(249,115,22,0.25); padding: 6px 16px; border-radius: 6px;
+    font-size: 12px; font-weight: 700; color: var(--color-accent);
+  }
+</style>
+</head>
+<body>
+<div class="ember-bg">
+  <div class="ember-orb"></div>
+  <div class="ember-orb"></div>
+  <div class="ember-orb"></div>
+</div>
+<div class="theme-label">Ember</div>
+<div class="preview">
+  <div class="sidebar">
+    <h3>Agents</h3>
+    <div class="sidebar-item active"><span class="agent-dot" style="background:#f97316;color:#f97316"></span>Controller</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#38bdf8;color:#38bdf8"></span>Codex</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#f43f5e;color:#f43f5e"></span>Gemini</div>
+    <div class="sidebar-item"><span class="agent-dot" style="background:#84cc16;color:#84cc16"></span>Kimi</div>
+    <h3 style="margin-top:20px">Pipelines</h3>
+    <div class="sidebar-item">Review Pipeline</div>
+    <div class="sidebar-item">Deploy Pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span class="session-bar">4,231 tkn &middot; $0.12</span>
+      <button class="btn">Settings</button>
+      <button class="btn btn-primary">New Chat</button>
+    </div>
+    <div class="content">
+      <div class="chat-sender">nate</div>
+      <div class="chat-bubble user">Analyze the auth module for security issues</div>
+      <div class="chat-sender" style="margin-top:16px"><span class="agent-dot" style="background:#f43f5e;color:#f43f5e"></span>agent-gemini</div>
+      <div class="chat-bubble">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="token-footer">274 in / 156 out (~$0.003)</div>
+      <div style="margin:16px 0; display:flex; gap:6px; flex-wrap:wrap">
+        <span class="tag tag-red">security</span>
+        <span class="tag tag-yellow">needs-review</span>
+        <span class="tag tag-blue">auth</span>
+        <span class="tag tag-green">completed</span>
+      </div>
+      <div class="card">
+        <div class="card-title">Task: Fix JWT Expiry</div>
+        <div class="card-sub">Assigned to Codex &middot; Priority: High</div>
+      </div>
+      <div style="margin-top:20px">
+        <input class="input" placeholder="Message your agents... (@mention to route)" />
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

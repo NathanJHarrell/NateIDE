@@ -1,0 +1,337 @@
+/* ── Theme Definitions ─────────────────────────────────── */
+/* Each theme overrides CSS custom properties defined in :root (styles.css). */
+/* Apply a theme by setting data-theme on <html>: document.documentElement.dataset.theme = "midnight" */
+
+/* ── Muted Dark Themes ────────────────────────────────── */
+
+[data-theme="midnight"] {
+  --color-background: #0c0e1a;
+  --color-surface: #12152a;
+  --color-surface-alt: #161930;
+  --color-ink: #9ca3b8;
+  --color-muted: #5b6590;
+  --color-accent: #6b78b0;
+  --color-accent-alt: #5060a0;
+  --color-glow: rgba(100, 116, 180, 0.15);
+  --color-border: rgba(100, 116, 180, 0.12);
+  --color-panel: #101322;
+  --color-panel-alt: #141830;
+  --color-panel-border: rgba(100, 116, 180, 0.1);
+  --color-input: #0a0c18;
+  --color-input-border: rgba(100, 116, 180, 0.12);
+  --color-text-bright: #c4cae0;
+  --color-text: #a0a8c0;
+  --color-text-dim: #6878a0;
+  --color-text-dimmer: #5060a0;
+  --color-text-dimmest: #3d4468;
+  --color-hover: rgba(100, 116, 180, 0.08);
+  --color-active: rgba(100, 116, 180, 0.12);
+}
+
+[data-theme="slate"] {
+  --color-background: #151518;
+  --color-surface: #1c1c20;
+  --color-surface-alt: #202024;
+  --color-ink: #a0a0a8;
+  --color-muted: #606068;
+  --color-accent: #8888a0;
+  --color-accent-alt: #707088;
+  --color-glow: rgba(160, 160, 170, 0.1);
+  --color-border: rgba(160, 160, 170, 0.08);
+  --color-panel: #1a1a1e;
+  --color-panel-alt: #1e1e22;
+  --color-panel-border: rgba(160, 160, 170, 0.08);
+  --color-input: #141416;
+  --color-input-border: rgba(160, 160, 170, 0.1);
+  --color-text-bright: #d0d0d8;
+  --color-text: #a8a8b0;
+  --color-text-dim: #707078;
+  --color-text-dimmer: #606068;
+  --color-text-dimmest: #48484f;
+  --color-hover: rgba(160, 160, 170, 0.06);
+  --color-active: rgba(160, 160, 170, 0.1);
+}
+
+[data-theme="warm"] {
+  --color-background: #171210;
+  --color-surface: #1e1916;
+  --color-surface-alt: #241e1a;
+  --color-ink: #b0a898;
+  --color-muted: #6d5c48;
+  --color-accent: #a08868;
+  --color-accent-alt: #8a7050;
+  --color-glow: rgba(180, 140, 100, 0.12);
+  --color-border: rgba(180, 140, 100, 0.1);
+  --color-panel: #1c1714;
+  --color-panel-alt: #201b18;
+  --color-panel-border: rgba(180, 140, 100, 0.1);
+  --color-input: #141010;
+  --color-input-border: rgba(180, 140, 100, 0.1);
+  --color-text-bright: #d8ccc0;
+  --color-text: #b8a898;
+  --color-text-dim: #8a7868;
+  --color-text-dimmer: #6d5c48;
+  --color-text-dimmest: #4a3e34;
+  --color-hover: rgba(180, 140, 100, 0.06);
+  --color-active: rgba(180, 140, 100, 0.1);
+}
+
+/* ── Light Themes ─────────────────────────────────────── */
+
+[data-theme="light-clean"] {
+  --color-background: #f8f8fa;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f4f4f8;
+  --color-ink: #4a4a54;
+  --color-muted: #9090a0;
+  --color-accent: #5060a0;
+  --color-accent-alt: #4050a0;
+  --color-glow: rgba(80, 96, 160, 0.1);
+  --color-border: #e0e0e8;
+  --color-panel: #ffffff;
+  --color-panel-alt: #f4f4f8;
+  --color-panel-border: #e0e0e8;
+  --color-input: #f8f8fa;
+  --color-input-border: #d8d8e0;
+  --color-text-bright: #2a2a34;
+  --color-text: #4a4a54;
+  --color-text-dim: #808090;
+  --color-text-dimmer: #9090a0;
+  --color-text-dimmest: #b0b0b8;
+  --color-hover: #f0f0f4;
+  --color-active: #e8e8f0;
+  --color-success: #2e8b57;
+  --color-warning: #b8860b;
+  --color-error: #cc3333;
+  --color-info: #4a78b0;
+}
+
+[data-theme="light-warm"] {
+  --color-background: #faf7f4;
+  --color-surface: #fefcfa;
+  --color-surface-alt: #f4f0ec;
+  --color-ink: #504840;
+  --color-muted: #a09080;
+  --color-accent: #8a7050;
+  --color-accent-alt: #7a6040;
+  --color-glow: rgba(160, 130, 100, 0.1);
+  --color-border: #e4dcd4;
+  --color-panel: #fefcfa;
+  --color-panel-alt: #f4f0ec;
+  --color-panel-border: #e0d8d0;
+  --color-input: #faf7f4;
+  --color-input-border: #dcd4cc;
+  --color-text-bright: #382e26;
+  --color-text: #504840;
+  --color-text-dim: #887868;
+  --color-text-dimmer: #a09080;
+  --color-text-dimmest: #b8a898;
+  --color-hover: #f2ece6;
+  --color-active: #e8e0d8;
+  --color-success: #2e8b57;
+  --color-warning: #b8860b;
+  --color-error: #cc3333;
+  --color-info: #6a7a50;
+}
+
+[data-theme="light-blue"] {
+  --color-background: #f4f7fa;
+  --color-surface: #fafcff;
+  --color-surface-alt: #f0f4fa;
+  --color-ink: #404858;
+  --color-muted: #7888a0;
+  --color-accent: #4868b0;
+  --color-accent-alt: #3858a0;
+  --color-glow: rgba(70, 100, 180, 0.1);
+  --color-border: #d4dff0;
+  --color-panel: #fafcff;
+  --color-panel-alt: #f0f4fa;
+  --color-panel-border: #dce4ee;
+  --color-input: #f4f7fa;
+  --color-input-border: #c8d4e4;
+  --color-text-bright: #283040;
+  --color-text: #404858;
+  --color-text-dim: #6878a0;
+  --color-text-dimmer: #7888a0;
+  --color-text-dimmest: #a0b0c0;
+  --color-hover: #edf2f8;
+  --color-active: #e0eaf4;
+  --color-success: #287048;
+  --color-warning: #907018;
+  --color-error: #c84840;
+  --color-info: #4868b0;
+}
+
+/* ── Fancy Themes (Canvas/WebGL) ──────────────────────── */
+/* These themes require canvas or Three.js backgrounds     */
+/* that can't be achieved with CSS variables alone.        */
+
+[data-theme="aurora"] {
+  --color-background: #06060e;
+  --color-surface: rgba(12, 10, 24, 0.75);
+  --color-surface-alt: rgba(20, 16, 36, 0.7);
+  --color-ink: #c8c4d8;
+  --color-muted: #5a5478;
+  --color-accent: #34d399;
+  --color-accent-alt: #22b080;
+  --color-glow: rgba(52, 211, 153, 0.12);
+  --color-border: rgba(100, 60, 180, 0.18);
+  --color-panel: rgba(14, 10, 28, 0.82);
+  --color-panel-alt: rgba(20, 16, 36, 0.7);
+  --color-panel-border: rgba(100, 60, 180, 0.15);
+  --color-input: rgba(10, 8, 20, 0.88);
+  --color-input-border: rgba(100, 60, 180, 0.18);
+  --color-text-bright: #e8e0ff;
+  --color-text: #c8c4d8;
+  --color-text-dim: #8a7ca0;
+  --color-text-dimmer: #5a5478;
+  --color-text-dimmest: #3a3458;
+  --color-hover: rgba(160, 60, 255, 0.06);
+  --color-active: rgba(160, 60, 255, 0.12);
+}
+
+[data-theme="liquid"] {
+  --color-background: #080510;
+  --color-surface: rgba(12, 8, 20, 0.75);
+  --color-surface-alt: rgba(20, 14, 32, 0.7);
+  --color-ink: #b8b0d0;
+  --color-muted: #5a5080;
+  --color-accent: #a855f7;
+  --color-accent-alt: #8b3fd0;
+  --color-glow: rgba(168, 85, 247, 0.12);
+  --color-border: rgba(147, 51, 234, 0.1);
+  --color-panel: rgba(12, 8, 20, 0.8);
+  --color-panel-alt: rgba(20, 14, 32, 0.7);
+  --color-panel-border: rgba(147, 51, 234, 0.08);
+  --color-input: rgba(8, 5, 16, 0.85);
+  --color-input-border: rgba(147, 51, 234, 0.1);
+  --color-text-bright: #e0d4f0;
+  --color-text: #b8b0d0;
+  --color-text-dim: #8878a8;
+  --color-text-dimmer: #5a5080;
+  --color-text-dimmest: #3d3560;
+  --color-hover: rgba(147, 51, 234, 0.06);
+  --color-active: rgba(147, 51, 234, 0.12);
+}
+
+[data-theme="nebula"] {
+  --color-background: #000810;
+  --color-surface: rgba(8, 6, 20, 0.7);
+  --color-surface-alt: rgba(16, 12, 30, 0.65);
+  --color-ink: #c8cce0;
+  --color-muted: #5a5880;
+  --color-accent: #c084fc;
+  --color-accent-alt: #9060d8;
+  --color-glow: rgba(192, 132, 252, 0.12);
+  --color-border: rgba(140, 120, 255, 0.1);
+  --color-panel: rgba(12, 8, 24, 0.8);
+  --color-panel-alt: rgba(20, 16, 40, 0.7);
+  --color-panel-border: rgba(140, 120, 255, 0.08);
+  --color-input: rgba(8, 6, 20, 0.85);
+  --color-input-border: rgba(140, 120, 255, 0.1);
+  --color-text-bright: #e0d4ff;
+  --color-text: #c8cce0;
+  --color-text-dim: #8a88b0;
+  --color-text-dimmer: #5a5880;
+  --color-text-dimmest: #3d3a60;
+  --color-hover: rgba(140, 120, 255, 0.06);
+  --color-active: rgba(140, 120, 255, 0.1);
+}
+
+[data-theme="particles"] {
+  --color-background: #06080d;
+  --color-surface: rgba(12, 16, 24, 0.9);
+  --color-surface-alt: rgba(18, 24, 36, 0.85);
+  --color-ink: #b0b8c8;
+  --color-muted: #4a5568;
+  --color-accent: #38bdf8;
+  --color-accent-alt: #2098d0;
+  --color-glow: rgba(56, 189, 248, 0.12);
+  --color-border: rgba(56, 189, 248, 0.1);
+  --color-panel: rgba(14, 18, 28, 0.92);
+  --color-panel-alt: rgba(22, 26, 40, 0.88);
+  --color-panel-border: rgba(56, 189, 248, 0.08);
+  --color-input: rgba(6, 8, 13, 0.85);
+  --color-input-border: rgba(56, 189, 248, 0.1);
+  --color-text-bright: #e2e8f0;
+  --color-text: #b0b8c8;
+  --color-text-dim: #6878a0;
+  --color-text-dimmer: #4a5568;
+  --color-text-dimmest: #2d3748;
+  --color-hover: rgba(56, 189, 248, 0.05);
+  --color-active: rgba(56, 189, 248, 0.1);
+}
+
+[data-theme="terminal"] {
+  --color-background: #020804;
+  --color-surface: rgba(4, 14, 6, 0.95);
+  --color-surface-alt: rgba(6, 20, 10, 0.9);
+  --color-ink: #88cc99;
+  --color-muted: #2d6b3d;
+  --color-accent: #33ff66;
+  --color-accent-alt: #1a8f36;
+  --color-glow: rgba(51, 255, 102, 0.1);
+  --color-border: rgba(51, 255, 102, 0.08);
+  --color-panel: rgba(6, 20, 10, 0.94);
+  --color-panel-alt: rgba(8, 24, 12, 0.9);
+  --color-panel-border: rgba(51, 255, 102, 0.08);
+  --color-input: rgba(2, 8, 4, 0.9);
+  --color-input-border: rgba(51, 255, 102, 0.1);
+  --color-text-bright: #33ff66;
+  --color-text: #88cc99;
+  --color-text-dim: #1a8f36;
+  --color-text-dimmer: #0d5520;
+  --color-text-dimmest: #0d5520;
+  --color-hover: rgba(51, 255, 102, 0.04);
+  --color-active: rgba(51, 255, 102, 0.08);
+  --panel-radius: 0px;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
+}
+
+[data-theme="ember"] {
+  --color-background: #0f0a08;
+  --color-surface: rgba(18, 12, 8, 0.9);
+  --color-surface-alt: rgba(24, 16, 10, 0.85);
+  --color-ink: #c8b0a0;
+  --color-muted: #6b5040;
+  --color-accent: #f97316;
+  --color-accent-alt: #d05a10;
+  --color-glow: rgba(249, 115, 22, 0.12);
+  --color-border: rgba(249, 115, 22, 0.1);
+  --color-panel: rgba(18, 12, 8, 0.92);
+  --color-panel-alt: rgba(24, 16, 10, 0.88);
+  --color-panel-border: rgba(249, 115, 22, 0.08);
+  --color-input: rgba(12, 8, 5, 0.9);
+  --color-input-border: rgba(249, 115, 22, 0.1);
+  --color-text-bright: #f0dcd0;
+  --color-text: #c8b0a0;
+  --color-text-dim: #8a7060;
+  --color-text-dimmer: #6b5040;
+  --color-text-dimmest: #4a3428;
+  --color-hover: rgba(249, 115, 22, 0.05);
+  --color-active: rgba(249, 115, 22, 0.1);
+}
+
+[data-theme="glass"] {
+  --color-background: #0a0a14;
+  --color-surface: rgba(16, 16, 28, 0.7);
+  --color-surface-alt: rgba(22, 22, 38, 0.65);
+  --color-ink: #b8bcd0;
+  --color-muted: #5a5e78;
+  --color-accent: #818cf8;
+  --color-accent-alt: #6070d8;
+  --color-glow: rgba(129, 140, 248, 0.12);
+  --color-border: rgba(129, 140, 248, 0.1);
+  --color-panel: rgba(16, 16, 28, 0.75);
+  --color-panel-alt: rgba(22, 22, 38, 0.7);
+  --color-panel-border: rgba(129, 140, 248, 0.08);
+  --color-input: rgba(10, 10, 20, 0.85);
+  --color-input-border: rgba(129, 140, 248, 0.1);
+  --color-text-bright: #e0e4f0;
+  --color-text: #b8bcd0;
+  --color-text-dim: #8088a8;
+  --color-text-dimmer: #5a5e78;
+  --color-text-dimmest: #3a3e58;
+  --color-hover: rgba(129, 140, 248, 0.06);
+  --color-active: rgba(129, 140, 248, 0.1);
+}

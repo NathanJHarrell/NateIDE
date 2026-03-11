@@ -1,0 +1,15 @@
+{
+  "name": "@nateide/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx tsx src/index.ts",
+    "dev:local": "bunx tsx src/local-server.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@nateide/orchestrator": "workspace:*",
+    "node-pty": "^1.1.0"
+  }
+}

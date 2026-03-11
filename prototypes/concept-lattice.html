@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OC - The Lattice Concept</title>
+    <style>
+        :root {
+            --bg: #05070a;
+            --grid: rgba(0, 255, 170, 0.05);
+            --line: rgba(0, 255, 170, 0.2);
+            --accent: #00ffaa;
+            --accent-dim: rgba(0, 255, 170, 0.1);
+            --font-mono: 'JetBrains Mono', monospace;
+            --panel-bg: rgba(10, 15, 20, 0.9);
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background: var(--bg);
+            color: #fff;
+            font-family: var(--font-mono);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 2000px;
+        }
+
+        /* --- BACKGROUND BLUEPRINT --- */
+        .blueprint-grid {
+            position: absolute;
+            inset: -100%;
+            background-image: 
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: rotateX(60deg) rotateZ(45deg);
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        /* --- THE LATTICE CONTAINER --- */
+        .lattice-world {
+            position: relative;
+            width: 1000px;
+            height: 600px;
+            transform-style: preserve-3d;
+            transform: rotateX(20deg) rotateY(-20deg);
+            transition: transform 0.1s ease-out;
+        }
+
+        /* --- FLOATING PLATES (Panels) --- */
+        .plate {
+            position: absolute;
+            background: var(--panel-bg);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            box-shadow: 
+                -10px 10px 30px rgba(0,0,0,0.5),
+                0 0 10px var(--accent-dim);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .plate:hover {
+            border-color: var(--accent);
+            box-shadow: -15px 15px 40px rgba(0, 255, 170, 0.1);
+            transform: translateZ(20px) !important;
+        }
+
+        /* Layout Positions */
+        .plate-editor {
+            width: 600px;
+            height: 400px;
+            left: 200px;
+            top: 50px;
+            transform: translateZ(50px);
+        }
+
+        .plate-sidebar {
+            width: 200px;
+            height: 500px;
+            left: -50px;
+            top: 0;
+            transform: translateZ(0px);
+        }
+
+        .plate-terminal {
+            width: 800px;
+            height: 150px;
+            left: 150px;
+            top: 480px;
+            transform: translateZ(-50px);
+        }
+
+        .plate-ai {
+            width: 300px;
+            height: 350px;
+            right: -100px;
+            top: 100px;
+            transform: translateZ(100px);
+            border-color: #ff005533;
+        }
+
+        /* --- PLATE DECORATIONS --- */
+        .plate-header {
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+        }
+
+        .plate-coords { color: #445566; font-size: 8px; }
+
+        .plate-body {
+            padding: 20px;
+            flex: 1;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #8899aa;
+        }
+
+        /* --- SCANNER BEAM --- */
+        .scanner {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: var(--accent);
+            box-shadow: 0 0 15px var(--accent);
+            top: 0;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .plate:hover .scanner {
+            animation: scan 2s linear infinite;
+            opacity: 0.5;
+        }
+
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+
+        /* --- CIRCUITRY LINES --- */
+        .conduit {
+            position: absolute;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .conduit-line {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 1;
+            stroke-dasharray: 5, 5;
+            opacity: 0.1;
+            animation: flow 10s linear infinite;
+        }
+
+        @keyframes flow { to { stroke-dashoffset: -100; } }
+
+        /* --- HUD --- */
+        .hud {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .hud-title {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 5px;
+            color: var(--accent);
+            text-shadow: 0 0 10px var(--accent-dim);
+        }
+
+        .hud-stats {
+            text-align: right;
+            font-size: 10px;
+            color: #445566;
+        }
+
+        .corner-bracket {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--accent);
+            opacity: 0.3;
+        }
+        .tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+        .tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+        .bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+        .br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+        /* --- SCROLLING LOGS --- */
+        .log-line { margin-bottom: 4px; display: flex; gap: 10px; }
+        .log-ts { color: #334455; }
+        .log-msg { color: #667788; }
+        .log-msg.active { color: var(--accent); }
+
+    </style>
+</head>
+<body>
+
+    <div class="blueprint-grid"></div>
+
+    <div class="lattice-world" id="world">
+        
+        <!-- SIDEBAR PLATE -->
+        <div class="plate plate-sidebar">
+            <div class="plate-header">
+                <span>Explorer</span>
+                <span class="plate-coords">X:00 Y:00 Z:00</span>
+            </div>
+            <div class="plate-body">
+                <div class="log-line"><span class="log-msg active">▶ src/</span></div>
+                <div class="log-line"><span class="log-msg">&nbsp;&nbsp;app.tsx</span></div>
+                <div class="log-line"><span class="log-msg">&nbsp;&nbsp;core/</span></div>
+                <div class="log-line"><span class="log-msg">&nbsp;&nbsp;&nbsp;&nbsp;engine.ts</span></div>
+                <div class="log-line"><span class="log-msg">&nbsp;&nbsp;styles/</span></div>
+                <div class="log-line"><span class="log-msg">&nbsp;&nbsp;&nbsp;&nbsp;lattice.css</span></div>
+            </div>
+            <div class="scanner"></div>
+        </div>
+
+        <!-- MAIN EDITOR PLATE -->
+        <div class="plate plate-editor">
+            <div class="plate-header">
+                <span>Buffer: app.tsx</span>
+                <span class="plate-coords">X:20 Y:05 Z:50</span>
+            </div>
+            <div class="plate-body" style="color: #aaddff;">
+                <div class="log-line"><span class="log-ts">01</span><span>import { Lattice } from './core';</span></div>
+                <div class="log-line"><span class="log-ts">02</span><span></span></div>
+                <div class="log-line"><span class="log-ts">03</span><span style="color: var(--accent);">export const</span> World = () => {</div>
+                <div class="log-line"><span class="log-ts">04</span><span>&nbsp;&nbsp;const [state, setState] = useState(null);</span></div>
+                <div class="log-line"><span class="log-ts">05</span><span></span></div>
+                <div class="log-line"><span class="log-ts">06</span><span>&nbsp;&nbsp;return (</span></div>
+                <div class="log-line"><span class="log-ts">07</span><span>&nbsp;&nbsp;&nbsp;&nbsp;&lt;div className="lattice"&gt;</span></div>
+                <div class="log-line"><span class="log-ts">08</span><span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{state.rendering ? 'Active' : 'Standby'}</span></div>
+                <div class="log-line"><span class="log-ts">09</span><span>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/div&gt;</span></div>
+                <div class="log-line"><span class="log-ts">10</span><span>&nbsp;&nbsp;);</span></div>
+                <div class="log-line"><span class="log-ts">11</span><span>};</span></div>
+            </div>
+            <div class="scanner"></div>
+        </div>
+
+        <!-- TERMINAL PLATE -->
+        <div class="plate plate-terminal">
+            <div class="plate-header">
+                <span>Terminal Output</span>
+                <span class="plate-coords">X:15 Y:48 Z:-50</span>
+            </div>
+            <div class="plate-body" style="font-size: 10px; color: #44dd88;">
+                <div class="log-line"><span>[SYS] Booting Lattice Core... done.</span></div>
+                <div class="log-line"><span>[SYS] Establishing isometric projection... done.</span></div>
+                <div class="log-line"><span>[SYS] Watching 42 files in /src...</span></div>
+                <div class="log-line"><span class="active">> Listening on port 3000</span></div>
+            </div>
+            <div class="scanner"></div>
+        </div>
+
+        <!-- AI PLATE -->
+        <div class="plate plate-ai">
+            <div class="plate-header" style="color: #ff0055;">
+                <span>Nexus Assistant</span>
+                <span class="plate-coords">X:80 Y:10 Z:100</span>
+            </div>
+            <div class="plate-body">
+                <p style="color: #ff0055; font-size: 10px; border: 1px solid #ff005533; padding: 10px;">
+                    DETECTED: Inefficient loop in engine.ts at line 42.
+                </p>
+                <p>Suggested optimization: Use Map for O(1) lookup instead of Array.find.</p>
+                <button style="background: transparent; border: 1px solid #ff0055; color: #ff0055; font-family: inherit; padding: 5px 10px; cursor: pointer;">APPLY FIX</button>
+            </div>
+            <div class="scanner"></div>
+        </div>
+
+    </div>
+
+    <!-- HUD -->
+    <div class="hud">
+        <div class="hud-top">
+            <div class="hud-title">LATTICE_IDE_v1.0</div>
+            <div class="hud-stats">
+                CPU_LOAD: 12%<br>
+                MEM_USAGE: 442MB<br>
+                Z_PLANE: ACTIVE
+            </div>
+        </div>
+        <div style="position: relative; width: 100px; height: 100px;">
+            <div class="corner-bracket tl"></div>
+            <div class="corner-bracket tr"></div>
+            <div class="corner-bracket bl"></div>
+            <div class="corner-bracket br"></div>
+        </div>
+    </div>
+
+    <script>
+        const world = document.getElementById('world');
+        
+        // Parallax / Rotation Effect
+        document.addEventListener('mousemove', (e) => {
+            const x = (window.innerWidth / 2 - e.clientX) / 40;
+            const y = (window.innerHeight / 2 - e.clientY) / 40;
+            
+            // Base rotation 20, -20 + mouse influence
+            world.style.transform = `rotateX(${20 + y}deg) rotateY(${-20 + x}deg)`;
+        });
+
+        // Click a plate to focus it
+        document.querySelectorAll('.plate').forEach(plate => {
+            plate.addEventListener('click', () => {
+                // Reset others
+                document.querySelectorAll('.plate').forEach(p => {
+                    p.style.opacity = '0.4';
+                });
+                plate.style.opacity = '1';
+                plate.style.borderColor = 'var(--accent)';
+            });
+        });
+    </script>
+</body>
+</html>

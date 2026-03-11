@@ -1,0 +1,29 @@
+{
+  "name": "@nateide/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bunx vite build",
+    "dev": "bunx vite",
+    "preview": "bunx vite preview"
+  },
+  "dependencies": {
+    "@nateide/agents": "workspace:*",
+    "@nateide/orchestrator": "workspace:*",
+    "@nateide/ui": "workspace:*",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "@xyflow/react": "^12.10.1",
+    "convex": "^1.32.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-markdown": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "vite": "^7.1.5"
+  }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Theme: Warm</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; }
+  body { height: 100vh; overflow: hidden; background: #171210; color: #b0a898; font-family: "Inter", system-ui; font-size: 13px; }
+
+  .shell { display: flex; height: 100vh; }
+
+  .sidebar {
+    width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    background: linear-gradient(180deg, #1e1916, #1a1512);
+    border-right: 1px solid rgba(180, 140, 100, 0.08);
+  }
+  .sidebar h3 {
+    margin: 0 0 10px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 2px; font-weight: 600; color: #6d5c48;
+  }
+  .sidebar-item {
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    transition: all 0.2s; border: 1px solid transparent;
+  }
+  .sidebar-item:hover { background: rgba(180, 140, 100, 0.04); }
+  .sidebar-item.active {
+    background: linear-gradient(135deg, rgba(180, 140, 100, 0.1), rgba(160, 120, 80, 0.06));
+    border-color: rgba(180, 140, 100, 0.12);
+    color: #d8ccc0;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 9px; }
+
+  .main { flex: 1; display: flex; flex-direction: column; }
+  .toolbar {
+    padding: 10px 20px; display: flex; gap: 8px; align-items: center;
+    background: linear-gradient(90deg, #1e1916, #1b1613);
+    border-bottom: 1px solid rgba(180, 140, 100, 0.08);
+  }
+  .toolbar-title { font-weight: 600; font-size: 15px; color: #d8ccc0; }
+  .session { font-size: 11px; color: #4a3e34; margin-left: auto; font-family: "JetBrains Mono", monospace; }
+
+  .btn {
+    padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(180, 140, 100, 0.08);
+    background: rgba(30, 25, 22, 0.8); color: #8a7868; font-size: 12px;
+    cursor: pointer; transition: all 0.2s; font-family: "Inter";
+  }
+  .btn:hover { border-color: rgba(180, 140, 100, 0.18); color: #b8a898; }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(180, 140, 100, 0.1), rgba(160, 120, 80, 0.06));
+    border-color: rgba(180, 140, 100, 0.14); color: #c8b8a8;
+  }
+
+  .content { flex: 1; padding: 24px; overflow: auto; }
+  .sender { font-size: 11px; color: #4a3e34; margin-bottom: 4px; font-family: "JetBrains Mono", monospace; }
+  .bubble {
+    border-radius: 14px; padding: 13px 18px; margin: 6px 0; max-width: 72%;
+    font-size: 13px; line-height: 1.6;
+    background: linear-gradient(135deg, #201b18, #1c1714);
+    border: 1px solid rgba(180, 140, 100, 0.05);
+  }
+  .bubble.user {
+    margin-left: auto;
+    background: linear-gradient(135deg, rgba(180, 140, 100, 0.08), rgba(160, 120, 80, 0.04));
+    border-color: rgba(180, 140, 100, 0.1);
+    color: #d8ccc0;
+  }
+  .card {
+    border-radius: 12px; padding: 14px 16px; margin: 14px 0;
+    background: linear-gradient(135deg, #201b18, #1c1714);
+    border: 1px solid rgba(180, 140, 100, 0.05);
+    border-left: 3px solid rgba(180, 140, 100, 0.18);
+  }
+  .card-title { font-weight: 600; color: #d8ccc0; margin-bottom: 4px; }
+  .card-sub { color: #4a3e34; font-size: 12px; }
+
+  .tags { margin: 14px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+  .tag-r { background: rgba(200,90,70,0.08); color: #c87060; }
+  .tag-y { background: rgba(200,170,60,0.06); color: #c0a848; }
+  .tag-b { background: rgba(130,140,170,0.08); color: #8898b0; }
+  .tag-g { background: rgba(80,160,100,0.08); color: #60b070; }
+
+  .footer { font-size: 10px; color: #3a3028; margin-top: 4px; font-family: "JetBrains Mono", monospace; }
+
+  input {
+    margin-top: 20px; padding: 12px 16px; border-radius: 10px;
+    border: 1px solid rgba(180, 140, 100, 0.07);
+    background: linear-gradient(135deg, #1e1916, #1a1512);
+    color: #b0a898; width: 100%; font-family: "Inter"; font-size: 13px;
+  }
+  input:focus { outline: none; border-color: rgba(180, 140, 100, 0.16); }
+  input::placeholder { color: #3a3028; }
+
+  .label {
+    position: fixed; top: 12px; right: 16px; z-index: 10;
+    background: #1e1916; border: 1px solid rgba(180, 140, 100, 0.12);
+    padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #6d5c48;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(180, 140, 100, 0.1); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="label">Warm</div>
+<div class="shell">
+  <div class="sidebar">
+    <h3>Agents</h3>
+    <div class="sidebar-item active"><span class="dot" style="background:#a08868"></span>Controller</div>
+    <div class="sidebar-item"><span class="dot" style="background:#d08848"></span>Codex</div>
+    <div class="sidebar-item"><span class="dot" style="background:#b07898"></span>Gemini</div>
+    <div class="sidebar-item"><span class="dot" style="background:#58a070"></span>Kimi</div>
+    <h3 style="margin-top:18px">Pipelines</h3>
+    <div class="sidebar-item">Review Pipeline</div>
+    <div class="sidebar-item">Deploy Pipeline</div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title">nateide</span>
+      <span class="session">4,231 tkn &middot; $0.12</span>
+      <button class="btn">Settings</button>
+      <button class="btn btn-primary">New Chat</button>
+    </div>
+    <div class="content">
+      <div class="sender">nate</div>
+      <div class="bubble user">Analyze the auth module for security issues</div>
+      <div class="sender" style="margin-top:14px"><span class="dot" style="background:#b07898;width:5px;height:5px"></span> agent-gemini</div>
+      <div class="bubble">I've reviewed the auth module and found 3 potential issues:<br><br>1. JWT tokens don't expire<br>2. No rate limiting on login endpoint<br>3. Password hashing uses MD5</div>
+      <div class="footer">274 in / 156 out (~$0.003)</div>
+      <div class="tags">
+        <span class="tag tag-r">security</span>
+        <span class="tag tag-y">needs-review</span>
+        <span class="tag tag-b">auth</span>
+        <span class="tag tag-g">completed</span>
+      </div>
+      <div class="card">
+        <div class="card-title">Task: Fix JWT Expiry</div>
+        <div class="card-sub">Assigned to Codex &middot; Priority: High</div>
+      </div>
+      <input placeholder="Message your agents... (@mention to route)" />
+    </div>
+  </div>
+</div>
+</body>
+</html>
