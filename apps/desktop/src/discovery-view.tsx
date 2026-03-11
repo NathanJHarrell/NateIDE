@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import React, { useState, useMemo } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import {
   useTrending,
   useRecentPublic,
   useDiscoverySearch,
   useDiscoveryByTag,
-  usePublicProjects,
-  usePublicPipelines,
   useToggleStar,
   useStarCount,
   useIsStarred,
@@ -38,6 +38,7 @@ interface ArtifactCard {
 
 interface DiscoveryViewProps {
   currentUserId?: Id<"users">;
+  currentWorkspaceId?: Id<"workspaces">;
   onNavigateToProfile?: (userId: Id<"users">) => void;
 }
 
@@ -241,6 +242,111 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--color-text-dim)",
     fontSize: 13,
   },
+  // Soul action buttons
+  soulActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 8,
+    borderTop: "1px solid var(--color-border)",
+  },
+  forkBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 600,
+    fontFamily: "var(--font-ui)",
+    borderRadius: 4,
+    border: "1px solid var(--color-accent)",
+    background: "transparent",
+    color: "var(--color-accent)",
+    cursor: "pointer",
+    transition: "background 0.15s, color 0.15s",
+  },
+  reportBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 500,
+    fontFamily: "var(--font-ui)",
+    borderRadius: 4,
+    border: "1px solid rgba(255,80,80,0.25)",
+    background: "transparent",
+    color: "#f77",
+    cursor: "pointer",
+    transition: "background 0.15s",
+    marginLeft: "auto",
+  },
+  reportPanel: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 6,
+    marginTop: 4,
+    padding: "10px",
+    background: "var(--color-panel)",
+    borderRadius: 6,
+    border: "1px solid rgba(255,80,80,0.2)",
+  },
+  reportLabel: {
+    fontSize: 11,
+    color: "#f77",
+    fontWeight: 600,
+    fontFamily: "var(--font-ui)",
+  },
+  reportInput: {
+    padding: "6px 8px",
+    fontSize: 12,
+    fontFamily: "var(--font-ui)",
+    background: "var(--color-input)",
+    border: "1px solid var(--color-input-border)",
+    borderRadius: 4,
+    color: "var(--color-text)",
+    outline: "none",
+    resize: "none" as const,
+  },
+  reportActions: {
+    display: "flex",
+    gap: 6,
+    justifyContent: "flex-end",
+  },
+  reportSubmitBtn: {
+    padding: "4px 12px",
+    fontSize: 11,
+    fontWeight: 600,
+    fontFamily: "var(--font-ui)",
+    borderRadius: 4,
+    border: "none",
+    background: "#c0392b",
+    color: "#fff",
+    cursor: "pointer",
+  },
+  reportCancelBtn: {
+    padding: "4px 12px",
+    fontSize: 11,
+    fontFamily: "var(--font-ui)",
+    borderRadius: 4,
+    border: "1px solid var(--color-border)",
+    background: "transparent",
+    color: "var(--color-text-dim)",
+    cursor: "pointer",
+  },
+  toastSuccess: {
+    fontSize: 11,
+    color: "#4a4",
+    fontFamily: "var(--font-ui)",
+    padding: "4px 0",
+  },
+  toastError: {
+    fontSize: 11,
+    color: "#f77",
+    fontFamily: "var(--font-ui)",
+    padding: "4px 0",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -304,24 +410,210 @@ function StarButton({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Soul-specific: Fork + Report
+// ---------------------------------------------------------------------------
+
+/**
+ * ForkButton
+ * Copies a public soul into the current user's workspace as a private document.
+ * Memory is intentionally excluded from forks (clean slate).
+ *
+ * TODO (Task Claude): pass currentWorkspaceId down from app context so this
+ * button is active whenever a user is inside a workspace.
+ */
+function ForkButton({
+  soulId,
+  soulName,
+  currentUserId,
+  currentWorkspaceId,
+}: {
+  soulId: Id<"souls">;
+  soulName: string;
+  currentUserId?: Id<"users">;
+  currentWorkspaceId?: Id<"workspaces">;
+}) {
+  const forkSoul = useMutation(api.souls.fork);
+  const [status, setStatus] = useState<"idle" | "forking" | "done" | "error">("idle");
+  const [hovered, setHovered] = useState(false);
+
+  const canFork = !!currentUserId && !!currentWorkspaceId;
+
+  const handleFork = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canFork || status === "forking") return;
+
+    setStatus("forking");
+    try {
+      await forkSoul({
+        id: soulId,
+        workspaceId: currentWorkspaceId!,
+        forkedBy: currentUserId! as unknown as string,
+        newName: `${soulName} (fork)`,
+      });
+      setStatus("done");
+      setTimeout(() => setStatus("idle"), 3000);
+    } catch (err) {
+      console.error("Fork failed:", err);
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 3000);
+    }
+  };
+
+  if (status === "done") {
+    return <span style={styles.toastSuccess}>\u2713 Forked to your workspace</span>;
+  }
+  if (status === "error") {
+    return <span style={styles.toastError}>Fork failed. Try again.</span>;
+  }
+
+  return (
+    <button
+      style={{
+        ...styles.forkBtn,
+        ...(hovered && canFork ? { background: "var(--color-accent)", color: "var(--color-background)" } : {}),
+        opacity: canFork ? 1 : 0.4,
+        cursor: canFork ? "pointer" : "not-allowed",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={handleFork}
+      title={
+        !currentUserId
+          ? "Sign in to fork"
+          : !currentWorkspaceId
+          ? "Open a workspace to fork into"
+          : `Fork \"${soulName}\" into your workspace`
+      }
+      disabled={!canFork || status === "forking"}
+    >
+      {status === "forking" ? "Forking..." : "\u{1F374} Fork"}
+    </button>
+  );
+}
+
+/**
+ * ReportButton
+ * Reports a public soul for review. On submission the soul is immediately
+ * reverted to workspace visibility server-side — no moderation queue delay.
+ *
+ * The panel expands inline to collect a reason before submitting.
+ */
+function ReportButton({
+  soulId,
+  currentUserId,
+}: {
+  soulId: Id<"souls">;
+  currentUserId?: Id<"users">;
+}) {
+  const reportSoul = useMutation(api.souls.report);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
+
+  const handleSubmit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUserId || !reason.trim() || status === "submitting") return;
+
+    setStatus("submitting");
+    try {
+      await reportSoul({
+        id: soulId,
+        reason: reason.trim(),
+        reportedBy: currentUserId as unknown as string,
+      });
+      setStatus("done");
+      setOpen(false);
+      setReason("");
+      setTimeout(() => setStatus("idle"), 4000);
+    } catch (err) {
+      console.error("Report failed:", err);
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 3000);
+    }
+  };
+
+  if (status === "done") {
+    return <span style={{ ...styles.toastSuccess, marginLeft: "auto" }}>Reported \u2014 removed from public view</span>;
+  }
+  if (status === "error") {
+    return <span style={{ ...styles.toastError, marginLeft: "auto" }}>Report failed. Try again.</span>;
+  }
+
+  if (open) {
+    return (
+      <div style={styles.reportPanel} onClick={(e) => e.stopPropagation()}>
+        <span style={styles.reportLabel}>Report this soul document</span>
+        <textarea
+          style={{ ...styles.reportInput, height: 60 }}
+          placeholder="Describe the issue (required)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+          autoFocus
+        />
+        <div style={styles.reportActions}>
+          <button
+            style={styles.reportCancelBtn}
+            onClick={(e) => { e.stopPropagation(); setOpen(false); setReason(""); }}
+          >
+            Cancel
+          </button>
+          <button
+            style={{
+              ...styles.reportSubmitBtn,
+              opacity: reason.trim() ? 1 : 0.5,
+              cursor: reason.trim() ? "pointer" : "not-allowed",
+            }}
+            onClick={handleSubmit}
+            disabled={!reason.trim() || status === "submitting"}
+          >
+            {status === "submitting" ? "Submitting..." : "Submit Report"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      style={{ ...styles.reportBtn }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!currentUserId) return;
+        setOpen(true);
+      }}
+      title={currentUserId ? "Report this soul document" : "Sign in to report"}
+      disabled={!currentUserId}
+    >
+      \u{1F6A9} Report
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Artifact card
+// ---------------------------------------------------------------------------
+
 function ArtifactCardComponent({
   artifact,
   currentUserId,
+  currentWorkspaceId,
   onNavigateToProfile,
 }: {
   artifact: ArtifactCard;
   currentUserId?: Id<"users">;
+  currentWorkspaceId?: Id<"workspaces">;
   onNavigateToProfile?: (userId: Id<"users">) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const isSoul = artifact.type === "soul";
 
   return (
     <div
       style={{
         ...styles.card,
-        borderColor: hovered
-          ? "var(--color-accent)"
-          : "var(--color-border)",
+        borderColor: hovered ? "var(--color-accent)" : "var(--color-border)",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -362,6 +654,22 @@ function ArtifactCardComponent({
           targetId={artifact.targetId}
         />
       </div>
+
+      {/* Fork + Report — soul cards only */}
+      {isSoul && (
+        <div style={styles.soulActions}>
+          <ForkButton
+            soulId={artifact.targetId as Id<"souls">}
+            soulName={artifact.name}
+            currentUserId={currentUserId}
+            currentWorkspaceId={currentWorkspaceId}
+          />
+          <ReportButton
+            soulId={artifact.targetId as Id<"souls">}
+            currentUserId={currentUserId}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -372,12 +680,12 @@ function ArtifactCardComponent({
 
 export function DiscoveryView({
   currentUserId,
+  currentWorkspaceId,
   onNavigateToProfile,
 }: DiscoveryViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
-  // Data hooks
   const trending = useTrending(12);
   const recent = useRecentPublic(12);
   const searchResults = useDiscoverySearch(searchQuery || "");
@@ -386,7 +694,6 @@ export function DiscoveryView({
   const isSearching = searchQuery.trim().length > 0;
   const isFiltering = activeTag !== null;
 
-  // Pick the right dataset to display
   const displayData = useMemo(() => {
     if (isSearching) return searchResults;
     if (isFiltering) return tagResults;
@@ -398,6 +705,8 @@ export function DiscoveryView({
     setSearchQuery("");
   };
 
+  const cardProps = { currentUserId, currentWorkspaceId, onNavigateToProfile };
+
   return (
     <div style={styles.container}>
       {/* Header + search */}
@@ -407,7 +716,7 @@ export function DiscoveryView({
           <input
             style={styles.searchInput}
             type="text"
-            placeholder="Search public projects, harnesses, pipelines..."
+            placeholder="Search public projects, harnesses, pipelines, souls..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -446,12 +755,7 @@ export function DiscoveryView({
           ) : displayData && displayData.length > 0 ? (
             <div style={styles.grid}>
               {displayData.map((a: any) => (
-                <ArtifactCardComponent
-                  key={a._id}
-                  artifact={a}
-                  currentUserId={currentUserId}
-                  onNavigateToProfile={onNavigateToProfile}
-                />
+                <ArtifactCardComponent key={a._id} artifact={a} {...cardProps} />
               ))}
             </div>
           ) : (
@@ -464,7 +768,7 @@ export function DiscoveryView({
         </div>
       )}
 
-      {/* Trending section (show when not searching/filtering) */}
+      {/* Trending */}
       {!isSearching && !isFiltering && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Trending</h3>
@@ -473,12 +777,7 @@ export function DiscoveryView({
           ) : trending && trending.length > 0 ? (
             <div style={styles.grid}>
               {trending.map((a: any) => (
-                <ArtifactCardComponent
-                  key={a._id}
-                  artifact={a}
-                  currentUserId={currentUserId}
-                  onNavigateToProfile={onNavigateToProfile}
-                />
+                <ArtifactCardComponent key={a._id} artifact={a} {...cardProps} />
               ))}
             </div>
           ) : (
@@ -489,7 +788,7 @@ export function DiscoveryView({
         </div>
       )}
 
-      {/* Recent section (show when not searching/filtering) */}
+      {/* Recently Published */}
       {!isSearching && !isFiltering && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Recently Published</h3>
@@ -498,12 +797,7 @@ export function DiscoveryView({
           ) : recent && recent.length > 0 ? (
             <div style={styles.grid}>
               {recent.map((a: any) => (
-                <ArtifactCardComponent
-                  key={a._id}
-                  artifact={a}
-                  currentUserId={currentUserId}
-                  onNavigateToProfile={onNavigateToProfile}
-                />
+                <ArtifactCardComponent key={a._id} artifact={a} {...cardProps} />
               ))}
             </div>
           ) : (
