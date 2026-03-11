@@ -586,7 +586,7 @@ function ReportButton({
       title={currentUserId ? "Report this soul document" : "Sign in to report"}
       disabled={!currentUserId}
     >
-      \u{1F6A9} Report
+      {"\u{1F6A9}"} Report
     </button>
   );
 }

@@ -2515,6 +2515,7 @@ function AppContent() {
           ) : view === "discovery" ? (
             <DiscoveryView
               currentUserId={userId ?? undefined}
+              currentWorkspaceId={activeConvexWorkspaceId ?? undefined}
               onNavigateToProfile={(uid) => {
                 setProfileUserId(uid);
                 setView("profile");
