@@ -11,7 +11,8 @@
     "dev": "bunx concurrently -k -n convex,daemon,desktop -c auto \"bunx convex dev\" \"bun --cwd apps/daemon dev\" \"bun --cwd apps/desktop dev\"",
     "dev:desktop": "bun --cwd apps/desktop dev",
     "dev:daemon": "bun --cwd apps/daemon dev",
-    "typecheck": "bunx tsc -p tsconfig.json --noEmit"
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit",
+    "dev:tauri": "bun --cwd apps/desktop tauri dev"
   },
   "devDependencies": {
     "@types/node": "^24.4.0",

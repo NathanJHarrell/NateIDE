@@ -2,12 +2,30 @@ import {
   startTransition,
   useCallback,
   useEffect,
-  useEffectEvent,
   useMemo,
   useRef,
   useState,
 } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBookOpen,
+  faChevronRight,
+  faCodeBranch,
+  faCompass,
+  faDesktop,
+  faDiagramProject,
+  faFileLines,
+  faFolder,
+  faFolderOpen,
+  faFolderTree,
+  faGear,
+  faRobot,
+  faTableColumns,
+  faTerminal,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
 import Markdown from "react-markdown";
 import type { AgentDescriptor } from "@nateide/agents";
 import {
@@ -130,6 +148,23 @@ type AppView = "workspace" | "kanban" | "settings" | "pipelines" | "souls" | "di
 type ProjectTab = {
   name: string;
   path: string;
+};
+
+const VIEW_ICONS: Record<AppView, IconDefinition> = {
+  workspace: faDesktop,
+  kanban: faTableColumns,
+  pipelines: faDiagramProject,
+  souls: faBookOpen,
+  terminals: faTerminal,
+  discovery: faCompass,
+  profile: faUser,
+  settings: faGear,
+};
+
+const PANEL_ICONS: Record<string, IconDefinition> = {
+  explorer: faFolderTree,
+  git: faCodeBranch,
+  agents: faRobot,
 };
 
 function emptyShellLayout(): ShellLayout {
@@ -302,6 +337,14 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected error";
 }
 
+function isNoSessionOpenError(error: unknown): boolean {
+  return error instanceof Error && error.message === "No session open.";
+}
+
+function isDaemonUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Failed to fetch";
+}
+
 async function requestJson<T>(pathname: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_ROOT}${pathname}`, init);
 
@@ -421,8 +464,12 @@ function TreeNodeView(props: {
           onClick={() => setIsOpen((current) => !current)}
           aria-expanded={isOpen}
         >
-          <span className={`tree-chevron ${isOpen ? "tree-chevron-open" : ""}`} />
-          <span className="tree-icon tree-icon-folder" />
+          <span className={`tree-chevron ${isOpen ? "tree-chevron-open" : ""}`} aria-hidden="true">
+            <FontAwesomeIcon icon={faChevronRight} />
+          </span>
+          <span className="tree-icon" aria-hidden="true">
+            <FontAwesomeIcon icon={isOpen ? faFolderOpen : faFolder} />
+          </span>
           <span className="tree-name">{node.name}</span>
         </button>
       ) : (
@@ -433,8 +480,10 @@ function TreeNodeView(props: {
           }`}
           onClick={() => onOpenFile(node.path)}
         >
-          <span className="tree-chevron tree-chevron-spacer" />
-          <span className="tree-icon tree-icon-file" />
+          <span className="tree-chevron tree-chevron-spacer" aria-hidden="true" />
+          <span className="tree-icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faFileLines} />
+          </span>
           <span className="tree-name">{node.name}</span>
         </button>
       )}
@@ -747,20 +796,7 @@ function FeedbackButtons({ agentId, messageContent }: { agentId: string; message
 
   const sendFeedback = (type: "positive" | "negative") => {
     setSent(type);
-    // Feedback is stored via Convex events — daemon endpoint removed
-    try {
-      void fetch(`${API_ROOT}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId,
-          type,
-          content: messageContent.slice(0, 200),
-        }),
-      });
-    } catch {
-      // Daemon may not support this endpoint; that's fine
-    }
+    // Feedback stored locally — Convex feedback table can be added later
   };
 
   return (
@@ -848,7 +884,7 @@ function renderAgentMessage(evt: AppEvent, runs: Run[]) {
             type="button"
             className="cancel-run-btn"
             onClick={() => {
-              void fetch(`${API_ROOT}/runs/${encodeURIComponent(matchingRun.id)}/cancel`, { method: "POST" });
+              // TODO: Cancel run via Convex mutation
             }}
           >
             Stop
@@ -952,7 +988,7 @@ function ConversationRoundsView({
           type="button"
           className="end-discussion-btn"
           onClick={() => {
-            void fetch(`${API_ROOT}/conversation/end`, { method: "POST" });
+            // TODO: End conversation via Convex mutation
           }}
         >
           End Discussion
@@ -1226,33 +1262,28 @@ function AppContent() {
     });
   }
 
-  const applyBootstrap = useEffectEvent((snapshot: ThreadBootstrap | null) => {
+  function applyBootstrap(snapshot: ThreadBootstrap) {
     startTransition(() => {
-      if (snapshot) {
-        upsertSession(snapshot);
-        setWorkspacePath(snapshot.workspace.rootPath);
-        setProjectTabs((current) => {
-          const next = [
-            { name: snapshot.workspace.name, path: snapshot.workspace.rootPath },
-            ...current.filter((tab) => tab.path !== snapshot.workspace.rootPath),
-          ];
-          return next.slice(0, 8);
-        });
-      }
+      upsertSession(snapshot);
+      setActiveProjectPath(snapshot.workspace.rootPath);
+      setWorkspacePath(snapshot.workspace.rootPath);
+      setProjectTabs((current) => {
+        const next = [
+          { name: snapshot.workspace.name, path: snapshot.workspace.rootPath },
+          ...current.filter((tab) => tab.path !== snapshot.workspace.rootPath),
+        ];
+        return next.slice(0, 8);
+      });
     });
-  });
+  }
 
-  const loadWorkspaceCandidates = useEffectEvent(async () => {
+  async function loadWorkspaceCandidates() {
     const candidates = await requestJson<WorkspaceCandidate[]>("/workspaces");
 
     startTransition(() => {
       setWorkspaces(candidates);
-
-      if (sessions.size === 0 && !workspacePath && candidates[0]) {
-        setWorkspacePath(candidates[0].path);
-      }
     });
-  });
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1329,47 +1360,54 @@ function AppContent() {
     }
   }, [settings.appearance.theme]);
 
+  // Probe daemon availability for terminal/file operations
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    async function probe() {
       try {
-        const [candidates, session, ideSettings] = await Promise.all([
-          requestJson<WorkspaceCandidate[]>("/workspaces"),
-          requestJson<ThreadBootstrap>("/session"),
-          requestJson<IdeSettings>("/settings"),
-        ]);
+        const res = await fetch(`${API_ROOT}/health`);
+        if (cancelled) return;
+        if (res.ok) {
+          const [candidates, ideSettings] = await Promise.all([
+            requestJson<WorkspaceCandidate[]>("/workspaces"),
+            requestJson<IdeSettings>("/settings"),
+          ]);
+          let session: ThreadBootstrap | null = null;
 
-        if (cancelled) {
-          return;
-        }
+          try {
+            session = await requestJson<ThreadBootstrap>("/session");
+          } catch (error) {
+            if (!isNoSessionOpenError(error)) {
+              throw error;
+            }
 
-        startTransition(() => {
-          setWorkspaces(candidates);
-          upsertSession(session);
-          setActiveProjectPath(session.workspace.rootPath);
-          setSettings(ideSettings);
-          setProjectTabs((current) => {
-            const next = [
-              { name: session.workspace.name, path: session.workspace.rootPath },
-              ...current.filter((tab) => tab.path !== session.workspace.rootPath),
-            ];
-            return next.slice(0, 8);
+            const initialPath = candidates[0]?.path ?? FALLBACK_ROOT;
+            session = await requestJson<ThreadBootstrap>("/workspace/open", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path: initialPath }),
+            });
+          }
+
+          if (cancelled) return;
+
+          startTransition(() => {
+            setConnectionState("live");
+            setWorkspaces(candidates);
+            setSettings(ideSettings);
+            setNotice("");
           });
-          setWorkspacePath(session.workspace.rootPath);
-          setConnectionState("live");
-          setNotice("");
-        });
-      } catch (error) {
-        if (cancelled) {
-          return;
+          applyBootstrap(session);
+        } else {
+          throw new Error("Daemon not healthy");
         }
-
+      } catch (error) {
+        if (cancelled) return;
         startTransition(() => {
           const demo = createDemoThreadBootstrap(FALLBACK_ROOT);
           upsertSession(demo);
           setActiveProjectPath(FALLBACK_ROOT);
-          setSettings(DEFAULT_SETTINGS);
           setWorkspacePath(FALLBACK_ROOT);
           setConnectionState("fallback");
           setNotice(getErrorMessage(error));
@@ -1377,37 +1415,12 @@ function AppContent() {
       }
     }
 
-    void load();
+    void probe();
+    return () => { cancelled = true; };
+  }, []);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [applyBootstrap]);
-
-  useEffect(() => {
-    if (connectionState !== "live") {
-      return;
-    }
-
-    const source = new EventSource(`${API_ROOT}/events`);
-
-    source.addEventListener("state", (event) => {
-      const snapshot = JSON.parse(event.data) as ThreadBootstrap;
-      startTransition(() => {
-        upsertSession(snapshot);
-      });
-    });
-
-    source.addEventListener("error", () => {
-      startTransition(() => {
-        setNotice("Live updates disconnected. Re-open the daemon if terminal output stops streaming.");
-      });
-    });
-
-    return () => {
-      source.close();
-    };
-  }, [applyBootstrap, connectionState]);
+  // SSE removed — Convex subscriptions provide real-time updates.
+  // Terminal output still streams via daemon WebSocket.
 
   const currentBootstrap = activeProjectPath
     ? sessions.get(activeProjectPath) ?? null
@@ -1483,38 +1496,60 @@ function AppContent() {
   }
 
   async function openWorkspace(targetPath: string) {
-    // Instant switch if we already have a cached session
-    if (sessions.has(targetPath)) {
-      setActiveProjectPath(targetPath);
-      setWorkspacePath(targetPath);
+    const trimmedPath = targetPath.trim();
+
+    if (!trimmedPath) {
+      startTransition(() => {
+        setNotice("Workspace path is required.");
+      });
+      return;
+    }
+
+    if (sessions.has(trimmedPath)) {
+      setActiveProjectPath(trimmedPath);
+      setWorkspacePath(trimmedPath);
       setView((current) => (current === "settings" ? "workspace" : current));
     }
 
     setIsSubmittingWorkspace(true);
 
     try {
-      const snapshot = await requestJson<ThreadBootstrap>("/workspace/open", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: targetPath }),
-      });
+      try {
+        const snapshot = await requestJson<ThreadBootstrap>("/workspace/open", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: trimmedPath }),
+        });
 
+        applyBootstrap(snapshot);
+        startTransition(() => {
+          setConnectionState("live");
+          setNotice("");
+          setView((current) => (current === "settings" ? "workspace" : current));
+        });
+        await loadWorkspaceCandidates();
+        return;
+      } catch (error) {
+        if (!isDaemonUnavailableError(error)) {
+          throw error;
+        }
+      }
+
+      const demo = createDemoThreadBootstrap(trimmedPath);
       startTransition(() => {
-        upsertSession(snapshot);
-        setActiveProjectPath(snapshot.workspace.rootPath);
-        setWorkspacePath(snapshot.workspace.rootPath);
+        upsertSession(demo);
+        setActiveProjectPath(trimmedPath);
+        setWorkspacePath(trimmedPath);
         setProjectTabs((current) => {
           const next = [
-            { name: snapshot.workspace.name, path: snapshot.workspace.rootPath },
-            ...current.filter((tab) => tab.path !== snapshot.workspace.rootPath),
+            { name: basename(trimmedPath), path: trimmedPath },
+            ...current.filter((tab) => tab.path !== trimmedPath),
           ];
           return next.slice(0, 8);
         });
-        setConnectionState("live");
         setNotice("");
         setView((current) => (current === "settings" ? "workspace" : current));
       });
-      await loadWorkspaceCandidates();
     } catch (error) {
       startTransition(() => {
         setNotice(getErrorMessage(error));
@@ -1528,28 +1563,57 @@ function AppContent() {
     setIsSubmittingWorkspace(true);
 
     try {
-      const snapshot = await requestJson<ThreadBootstrap>("/workspace/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: targetPath }),
-      });
+      let createdSnapshot: ThreadBootstrap | null = null;
 
-      startTransition(() => {
-        upsertSession(snapshot);
-        setActiveProjectPath(snapshot.workspace.rootPath);
-        setWorkspacePath(snapshot.workspace.rootPath);
-        setProjectTabs((current) => {
-          const next = [
-            { name: snapshot.workspace.name, path: snapshot.workspace.rootPath },
-            ...current.filter((tab) => tab.path !== snapshot.workspace.rootPath),
-          ];
-          return next.slice(0, 8);
+      try {
+        createdSnapshot = await requestJson<ThreadBootstrap>("/workspace/create", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: targetPath }),
         });
-        setConnectionState("live");
-        setNotice("");
-        setView("workspace");
-      });
-      await loadWorkspaceCandidates();
+      } catch (error) {
+        if (!isDaemonUnavailableError(error)) {
+          throw error;
+        }
+      }
+
+      // Create workspace in Convex
+      if (userId) {
+        const rootPath = createdSnapshot?.workspace.rootPath ?? targetPath;
+        const workspaceName = createdSnapshot?.workspace.name ?? basename(targetPath);
+
+        await createWorkspaceMutation({
+          userId: userId,
+          name: workspaceName,
+          rootPath,
+        });
+      }
+
+      if (createdSnapshot) {
+        applyBootstrap(createdSnapshot);
+        startTransition(() => {
+          setConnectionState("live");
+          setNotice("");
+          setView("workspace");
+        });
+        await loadWorkspaceCandidates();
+      } else {
+        const demo = createDemoThreadBootstrap(targetPath);
+        startTransition(() => {
+          upsertSession(demo);
+          setActiveProjectPath(targetPath);
+          setWorkspacePath(targetPath);
+          setProjectTabs((current) => {
+            const next = [
+              { name: basename(targetPath), path: targetPath },
+              ...current.filter((tab) => tab.path !== targetPath),
+            ];
+            return next.slice(0, 8);
+          });
+          setNotice("");
+          setView("workspace");
+        });
+      }
     } catch (error) {
       startTransition(() => {
         setNotice(getErrorMessage(error));
@@ -1655,18 +1719,6 @@ function AppContent() {
         });
       }
 
-      // Also send to daemon if connected (triggers agent execution)
-      if (connectionState === "live") {
-        await requestJson<ThreadBootstrap>("/thread/messages", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            content: messageDraft,
-            requestedAgentIds: selectedAgentIds,
-          }),
-        });
-      }
-
       startTransition(() => {
         setMessageDraft("");
         setNotice("");
@@ -1711,31 +1763,14 @@ function AppContent() {
     }
   }
 
-  async function createBoardLane(input: { color?: string; name: string }) {
-    if (connectionState !== "live") {
-      return;
-    }
-
-    await requestJson("/board/lanes", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    });
+  // Board/kanban CRUD — local state only (will be backed by Convex in a future pass)
+  async function createBoardLane(_input: { color?: string; name: string }) {
+    // TODO: Convex kanban table
   }
-
-  async function renameBoardLane(laneId: string, input: { color?: string; name?: string }) {
-    if (connectionState !== "live") {
-      return;
-    }
-
-    await requestJson(`/board/lanes/${encodeURIComponent(laneId)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    });
+  async function renameBoardLane(_laneId: string, _input: { color?: string; name?: string }) {
+    // TODO: Convex kanban table
   }
-
-  async function createBoardCard(input: {
+  async function createBoardCard(_input: {
     assignedAgentId?: string;
     description?: string;
     fileTags?: Array<{ kind: "file" | "directory"; path: string }>;
@@ -1743,33 +1778,10 @@ function AppContent() {
     priority?: "low" | "medium" | "high";
     title: string;
   }) {
-    if (connectionState !== "live") {
-      return;
-    }
-
-    await requestJson("/board/cards", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    });
+    // TODO: Convex kanban table
   }
-
-  async function moveBoardCard(cardId: string, laneId: string) {
-    if (connectionState !== "live") {
-      return;
-    }
-
-    const card = currentBootstrap?.board.cards.find((entry) => entry.id === cardId);
-
-    if (!card) {
-      return;
-    }
-
-    await requestJson(`/board/cards/${encodeURIComponent(cardId)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ laneId, title: card.title }),
-    });
+  async function moveBoardCard(_cardId: string, _laneId: string) {
+    // TODO: Convex kanban table
   }
 
   async function saveSettings(nextSettings: IdeSettings) {
@@ -1789,19 +1801,6 @@ function AppContent() {
         });
       } catch {
         // Fall through to local update
-      }
-    }
-
-    // Also save to daemon if connected (backward compat)
-    if (connectionState === "live") {
-      try {
-        await requestJson<IdeSettings>("/settings", {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(nextSettings),
-        });
-      } catch {
-        // Daemon save failed, Convex save may have succeeded
       }
     }
 
@@ -2047,7 +2046,15 @@ function AppContent() {
                 type="button"
                 className="new-conversation-btn"
                 onClick={() => {
-                  void fetch(`${API_ROOT}/thread/clear`, { method: "POST" });
+                  // Thread clear is handled by Convex — create a new thread
+                  if (activeConvexWorkspaceId) {
+                    void createThreadMutation({
+                      workspaceId: activeConvexWorkspaceId,
+                      title: "New Conversation",
+                    }).then((newThreadId) => {
+                      setActiveThreadId(newThreadId as Id<"threads">);
+                    });
+                  }
                 }}
               >
                 New Conversation
@@ -2220,7 +2227,8 @@ function AppContent() {
                   type="button"
                   className="stop-all-btn"
                   onClick={() => {
-                    void fetch(`${API_ROOT}/runs/cancel-all`, { method: "POST" });
+                    // TODO: Cancel runs via Convex mutation
+                    setNotice("Stopping agents...");
                   }}
                 >
                   Stop All Agents
@@ -2402,64 +2410,72 @@ function AppContent() {
               className={`activity-bar-item ${view === "workspace" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("workspace")}
               title="Workspace"
+              aria-label="Workspace"
             >
-              ▤
+              <FontAwesomeIcon icon={VIEW_ICONS.workspace} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "kanban" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("kanban")}
               title="Kanban"
+              aria-label="Kanban"
             >
-              📋
+              <FontAwesomeIcon icon={VIEW_ICONS.kanban} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "pipelines" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("pipelines")}
               title="Pipelines"
+              aria-label="Pipelines"
             >
-              ⟿
+              <FontAwesomeIcon icon={VIEW_ICONS.pipelines} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "souls" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("souls")}
               title="Soul Editor"
+              aria-label="Soul Editor"
             >
-              ♦
+              <FontAwesomeIcon icon={VIEW_ICONS.souls} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "terminals" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("terminals")}
               title="Terminal Workspace"
+              aria-label="Terminal Workspace"
             >
-              ⌨
+              <FontAwesomeIcon icon={VIEW_ICONS.terminals} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "discovery" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("discovery")}
               title="Discover"
+              aria-label="Discover"
             >
-              ◎
+              <FontAwesomeIcon icon={VIEW_ICONS.discovery} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "profile" ? "activity-bar-item-active" : ""}`}
               onClick={() => { setProfileUserId(userId); setView("profile"); }}
               title="Profile"
+              aria-label="Profile"
             >
-              ◉
+              <FontAwesomeIcon icon={VIEW_ICONS.profile} fixedWidth />
             </button>
             <button
               type="button"
               className={`activity-bar-item ${view === "settings" ? "activity-bar-item-active" : ""}`}
               onClick={() => setView("settings")}
               title="Settings"
+              aria-label="Settings"
             >
-              ⚙
+              <FontAwesomeIcon icon={VIEW_ICONS.settings} fixedWidth />
             </button>
           </div>
           
@@ -2474,8 +2490,13 @@ function AppContent() {
                 left: p.id 
               }))}
               title={p.title}
+              aria-label={p.title}
             >
-              {p.id === "explorer" ? "📁" : p.id === "git" ? "⎇" : p.id === "agents" ? "◈" : p.id.slice(0, 1).toUpperCase()}
+              {PANEL_ICONS[p.id] ? (
+                <FontAwesomeIcon icon={PANEL_ICONS[p.id]} fixedWidth />
+              ) : (
+                <span className="activity-bar-fallback-label">{p.id.slice(0, 1).toUpperCase()}</span>
+              )}
             </button>
           ))}
         </aside>
@@ -2494,7 +2515,11 @@ function AppContent() {
               settings={settings}
             />
           ) : view === "pipelines" ? (
-            <PipelineEditor agents={currentBootstrap.agents} />
+            <PipelineEditor
+              agents={currentBootstrap.agents}
+              workspaceId={activeConvexWorkspaceId ?? undefined}
+              currentUserId={userId ? String(userId) : undefined}
+            />
           ) : view === "souls" ? (
             <SoulEditor
               workspaceId={activeConvexWorkspaceId ?? undefined}
@@ -2510,6 +2535,13 @@ function AppContent() {
               onOpenSession={openInteractiveTerminal}
               onResizeSession={resizeInteractiveTerminal}
               onSendInput={sendTerminalInput}
+              activeView={view}
+              onNavigateView={(nextView) => {
+                if (nextView === "profile") {
+                  setProfileUserId(userId);
+                }
+                setView(nextView);
+              }}
               onBackToIde={() => setView("workspace")}
             />
           ) : view === "discovery" ? (

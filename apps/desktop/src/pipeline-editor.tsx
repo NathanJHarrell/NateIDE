@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import {
   ReactFlow,
@@ -18,9 +18,58 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { AgentDescriptor } from "@nateide/agents";
-import type { Pipeline, PipelineNode, PipelineEdge } from "@nateide/protocol";
+import type { Id } from "../../../convex/_generated/dataModel";
+import {
+  usePipelines,
+  useCreatePipeline,
+  useUpdatePipeline,
+  useRemovePipeline,
+  useCreatePipelineExecution,
+} from "./convex-hooks";
 
-const API_ROOT = "/api";
+// ── Types ───────────────────────────────────────────────
+
+interface PipelineEditorProps {
+  agents: AgentDescriptor[];
+  workspaceId?: Id<"workspaces">;
+  currentUserId?: string;
+}
+
+/** Shape of a pipeline node as stored in Convex (v.any() array items). */
+interface PipelineNodeData {
+  id: string;
+  type: "agent" | "condition" | "start" | "end" | "parallel-split" | "parallel-join";
+  label: string;
+  agentId?: string;
+  condition?: string;
+  position: { x: number; y: number };
+}
+
+/** Shape of a pipeline edge as stored in Convex (v.any() array items). */
+interface PipelineEdgeData {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+  sourceHandle?: string;
+}
+
+/** Convex pipeline document shape (from usePipelines query). */
+interface ConvexPipeline {
+  _id: Id<"pipelines">;
+  _creationTime: number;
+  name: string;
+  description?: string;
+  nodes: PipelineNodeData[];
+  edges: PipelineEdgeData[];
+  variables?: Record<string, unknown>;
+  defaultPolicy?: "safe" | "yolo";
+  visibility: "private" | "workspace" | "public";
+  workspaceId?: Id<"workspaces">;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 // ── Custom Node Components ──────────────────────────────
 
@@ -98,7 +147,7 @@ const nodeTypes: NodeTypes = {
 
 // ── Helpers ─────────────────────────────────────────────
 
-function pipelineToFlowNodes(pipeline: Pipeline, agents: AgentDescriptor[]): Node[] {
+function pipelineToFlowNodes(pipeline: ConvexPipeline, agents: AgentDescriptor[]): Node[] {
   return pipeline.nodes.map((n) => {
     const agent = n.agentId ? agents.find((a) => a.id === n.agentId) : undefined;
     return {
@@ -115,7 +164,7 @@ function pipelineToFlowNodes(pipeline: Pipeline, agents: AgentDescriptor[]): Nod
   });
 }
 
-function pipelineToFlowEdges(pipeline: Pipeline): Edge[] {
+function pipelineToFlowEdges(pipeline: ConvexPipeline): Edge[] {
   return pipeline.edges.map((e) => ({
     id: e.id,
     source: e.source,
@@ -127,10 +176,10 @@ function pipelineToFlowEdges(pipeline: Pipeline): Edge[] {
   }));
 }
 
-function flowToPipelineNodes(nodes: Node[]): PipelineNode[] {
+function flowToPipelineNodes(nodes: Node[]): PipelineNodeData[] {
   return nodes.map((n) => ({
     id: n.id,
-    type: (n.type ?? "agent") as PipelineNode["type"],
+    type: (n.type ?? "agent") as PipelineNodeData["type"],
     agentId: (n.data as { agentId?: string }).agentId || undefined,
     condition: (n.data as { condition?: string }).condition || undefined,
     label: (n.data as { label: string }).label,
@@ -138,7 +187,7 @@ function flowToPipelineNodes(nodes: Node[]): PipelineNode[] {
   }));
 }
 
-function flowToPipelineEdges(edges: Edge[]): PipelineEdge[] {
+function flowToPipelineEdges(edges: Edge[]): PipelineEdgeData[] {
   return edges.map((e) => ({
     id: e.id,
     source: e.source,
@@ -148,110 +197,152 @@ function flowToPipelineEdges(edges: Edge[]): PipelineEdge[] {
   }));
 }
 
-function newDefaultPipeline(): Pipeline {
+/** Default nodes for a brand-new unsaved pipeline. */
+function newDefaultPipelineState() {
   return {
-    id: `pipeline-${Date.now()}`,
     name: "New Pipeline",
     description: "",
     nodes: [
-      { id: "start-1", type: "start", label: "Start", position: { x: 50, y: 200 } },
-      { id: "end-1", type: "end", label: "End", position: { x: 600, y: 200 } },
+      { id: "start-1", type: "start" as const, label: "Start", position: { x: 50, y: 200 } },
+      { id: "end-1", type: "end" as const, label: "End", position: { x: 600, y: 200 } },
     ],
-    edges: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    edges: [] as PipelineEdgeData[],
   };
 }
 
 // ── Main Component ──────────────────────────────────────
 
-export function PipelineEditor({ agents }: { agents: AgentDescriptor[] }) {
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [activePipeline, setActivePipeline] = useState<Pipeline | null>(null);
+export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineEditorProps) {
+  const pipelines = usePipelines(workspaceId) as ConvexPipeline[] | undefined;
+  const createPipeline = useCreatePipeline();
+  const updatePipeline = useUpdatePipeline();
+  const removePipeline = useRemovePipeline();
+  const createExecution = useCreatePipelineExecution();
+
+  const [activePipeline, setActivePipeline] = useState<ConvexPipeline | null>(null);
   const [pipelineName, setPipelineName] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isSaving, setIsSaving] = useState(false);
+  /** Track when a new pipeline is being edited but not yet saved to Convex. */
+  const [isNewUnsaved, setIsNewUnsaved] = useState(false);
 
   const workerAgents = useMemo(
     () => agents.filter((a) => a.id !== "agent-controller"),
     [agents],
   );
 
-  // Load pipelines
-  useEffect(() => {
-    fetch(`${API_ROOT}/pipelines`)
-      .then((r) => r.json())
-      .then((data) => setPipelines(data as Pipeline[]))
-      .catch(() => {});
-  }, []);
-
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: "#3f78c7" } }, eds)),
     [setEdges],
   );
 
-  function loadPipeline(pipeline: Pipeline) {
+  function loadPipeline(pipeline: ConvexPipeline) {
     setActivePipeline(pipeline);
+    setIsNewUnsaved(false);
     setPipelineName(pipeline.name);
     setNodes(pipelineToFlowNodes(pipeline, agents));
     setEdges(pipelineToFlowEdges(pipeline));
   }
 
   function createNewPipeline() {
-    const p = newDefaultPipeline();
-    loadPipeline(p);
+    const defaults = newDefaultPipelineState();
+    // Build a temporary ConvexPipeline-shaped object (no _id yet).
+    const temp = {
+      _id: "" as Id<"pipelines">,
+      _creationTime: Date.now(),
+      name: defaults.name,
+      description: defaults.description,
+      nodes: defaults.nodes,
+      edges: defaults.edges,
+      visibility: "private" as const,
+      createdBy: currentUserId ?? "unknown",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } satisfies ConvexPipeline;
+
+    setActivePipeline(temp);
+    setIsNewUnsaved(true);
+    setPipelineName(temp.name);
+    setNodes(pipelineToFlowNodes(temp, agents));
+    setEdges(pipelineToFlowEdges(temp));
   }
 
   async function savePipeline() {
     if (!activePipeline) return;
     setIsSaving(true);
 
-    const updated: Pipeline = {
-      ...activePipeline,
-      name: pipelineName || activePipeline.name,
-      nodes: flowToPipelineNodes(nodes),
-      edges: flowToPipelineEdges(edges),
-    };
+    const pipelineNodes = flowToPipelineNodes(nodes);
+    const pipelineEdges = flowToPipelineEdges(edges);
+    const name = pipelineName || activePipeline.name;
 
     try {
-      const saved = await fetch(`${API_ROOT}/pipelines`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(updated),
-      }).then((r) => r.json()) as Pipeline;
+      if (isNewUnsaved || !activePipeline._id) {
+        // Create new pipeline in Convex
+        const newId = await createPipeline({
+          name,
+          description: activePipeline.description ?? "",
+          nodes: pipelineNodes,
+          edges: pipelineEdges,
+          variables: activePipeline.variables,
+          defaultPolicy: activePipeline.defaultPolicy,
+          visibility: activePipeline.visibility,
+          workspaceId,
+          createdBy: currentUserId ?? "unknown",
+        });
 
-      setActivePipeline(saved);
-      setPipelines((prev) => {
-        const index = prev.findIndex((p) => p.id === saved.id);
-        if (index >= 0) {
-          const next = [...prev];
-          next[index] = saved;
-          return next;
-        }
-        return [...prev, saved];
-      });
+        // Build the saved doc shape so we can keep editing
+        const saved: ConvexPipeline = {
+          ...activePipeline,
+          _id: newId,
+          name,
+          nodes: pipelineNodes,
+          edges: pipelineEdges,
+          updatedAt: Date.now(),
+        };
+        setActivePipeline(saved);
+        setIsNewUnsaved(false);
+      } else {
+        // Update existing pipeline in Convex
+        await updatePipeline({
+          id: activePipeline._id,
+          name,
+          description: activePipeline.description,
+          nodes: pipelineNodes,
+          edges: pipelineEdges,
+          variables: activePipeline.variables,
+          defaultPolicy: activePipeline.defaultPolicy,
+          visibility: activePipeline.visibility,
+        });
+
+        setActivePipeline({
+          ...activePipeline,
+          name,
+          nodes: pipelineNodes,
+          edges: pipelineEdges,
+          updatedAt: Date.now(),
+        });
+      }
     } finally {
       setIsSaving(false);
     }
   }
 
   async function deletePipeline() {
-    if (!activePipeline) return;
-    await fetch(`${API_ROOT}/pipelines/${encodeURIComponent(activePipeline.id)}`, { method: "DELETE" });
-    setPipelines((prev) => prev.filter((p) => p.id !== activePipeline!.id));
+    if (!activePipeline || !activePipeline._id) return;
+    await removePipeline({ id: activePipeline._id });
     setActivePipeline(null);
+    setIsNewUnsaved(false);
     setNodes([]);
     setEdges([]);
     setPipelineName("");
   }
 
   async function executePipelineHandler() {
-    if (!activePipeline) return;
-    await fetch(`${API_ROOT}/pipelines/${encodeURIComponent(activePipeline.id)}/execute`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: "Execute this pipeline" }),
+    if (!activePipeline || !activePipeline._id) return;
+    await createExecution({
+      pipelineId: activePipeline._id,
+      triggeredBy: currentUserId ?? "unknown",
     });
   }
 
@@ -310,6 +401,8 @@ export function PipelineEditor({ agents }: { agents: AgentDescriptor[] }) {
     setNodes((nds) => [...nds, newNode]);
   }
 
+  const pipelineList = pipelines ?? [];
+
   return (
     <div className="pipeline-editor">
       <div className="pipeline-sidebar">
@@ -319,11 +412,11 @@ export function PipelineEditor({ agents }: { agents: AgentDescriptor[] }) {
             + New Pipeline
           </button>
           <div className="pipeline-list">
-            {pipelines.map((p) => (
+            {pipelineList.map((p) => (
               <button
                 type="button"
-                key={p.id}
-                className={`pipeline-list-item ${activePipeline?.id === p.id ? "pipeline-list-item-active" : ""}`}
+                key={p._id}
+                className={`pipeline-list-item ${activePipeline?._id === p._id ? "pipeline-list-item-active" : ""}`}
                 onClick={() => loadPipeline(p)}
               >
                 {p.name}

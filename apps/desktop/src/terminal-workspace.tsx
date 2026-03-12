@@ -6,6 +6,18 @@ import {
   useState,
 } from "react";
 import type { CSSProperties } from "react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBookOpen,
+  faCompass,
+  faDesktop,
+  faDiagramProject,
+  faGear,
+  faTableColumns,
+  faTerminal,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
 import type { TerminalSessionSnapshot } from "@nateide/workspace";
 import { TerminalPane } from "./terminal-pane";
 
@@ -37,7 +49,34 @@ type TerminalWorkspaceProps = {
   onResizeSession: (terminalSessionId: string, cols: number, rows: number) => Promise<void>;
   onSendInput: (terminalSessionId: string, data: string) => Promise<void>;
   onBackToIde?: () => void;
+  activeView?: TerminalWorkspaceView;
+  onNavigateView?: (view: TerminalWorkspaceView) => void;
 };
+
+type TerminalWorkspaceView =
+  | "workspace"
+  | "kanban"
+  | "pipelines"
+  | "souls"
+  | "terminals"
+  | "discovery"
+  | "profile"
+  | "settings";
+
+const TERMINAL_WORKSPACE_NAV_ITEMS: Array<{
+  id: TerminalWorkspaceView;
+  icon: IconDefinition;
+  label: string;
+}> = [
+  { id: "workspace", icon: faDesktop, label: "Workspace" },
+  { id: "kanban", icon: faTableColumns, label: "Kanban" },
+  { id: "pipelines", icon: faDiagramProject, label: "Pipelines" },
+  { id: "souls", icon: faBookOpen, label: "Soul Editor" },
+  { id: "terminals", icon: faTerminal, label: "Terminal Workspace" },
+  { id: "discovery", icon: faCompass, label: "Discover" },
+  { id: "profile", icon: faUser, label: "Profile" },
+  { id: "settings", icon: faGear, label: "Settings" },
+];
 
 // ---------------------------------------------------------------------------
 // Grid layout calculation
@@ -147,9 +186,193 @@ const styles = {
     position: "fixed",
     inset: 0,
     display: "flex",
-    flexDirection: "column",
     background: "var(--color-background)",
     zIndex: 1000,
+  } satisfies CSSProperties,
+
+  sidebar: {
+    width: 248,
+    minWidth: 248,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    padding: "14px 12px 12px",
+    background: "var(--color-surface)",
+    borderRight: "1px solid var(--color-border)",
+    overflow: "hidden",
+  } satisfies CSSProperties,
+
+  sidebarHeader: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    padding: "0 6px 12px",
+    borderBottom: "1px solid var(--color-border)",
+  } satisfies CSSProperties,
+
+  sidebarEyebrow: {
+    fontSize: 10,
+    fontFamily: "var(--font-ui)",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "var(--color-text-dimmest)",
+  } satisfies CSSProperties,
+
+  sidebarTitle: {
+    fontSize: 16,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 600,
+    color: "var(--color-text-bright)",
+  } satisfies CSSProperties,
+
+  sidebarPath: {
+    fontSize: 11,
+    fontFamily: "var(--font-mono)",
+    color: "var(--color-text-dimmer)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+
+  sidebarSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    minHeight: 0,
+  } satisfies CSSProperties,
+
+  sidebarSectionTitle: {
+    padding: "0 6px",
+    fontSize: 10,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 700,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "var(--color-text-dimmest)",
+  } satisfies CSSProperties,
+
+  sidebarNavList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  } satisfies CSSProperties,
+
+  sidebarNavButton: (active: boolean): CSSProperties => ({
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "8px 10px",
+    background: active ? "var(--color-active)" : "transparent",
+    color: active ? "var(--color-text-bright)" : "var(--color-text-dim)",
+    border: "1px solid",
+    borderColor: active ? "var(--color-accent)" : "transparent",
+    borderRadius: 8,
+    cursor: "pointer",
+    textAlign: "left",
+    fontSize: 12,
+    fontFamily: "var(--font-ui)",
+    fontWeight: active ? 600 : 450,
+    transition: "all 0.15s ease",
+  }),
+
+  sidebarNavIcon: {
+    width: 16,
+    flexShrink: 0,
+    display: "inline-flex",
+    justifyContent: "center",
+  } satisfies CSSProperties,
+
+  sidebarTerminalList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    minHeight: 0,
+    overflow: "auto",
+    paddingRight: 4,
+  } satisfies CSSProperties,
+
+  sidebarTerminalButton: (active: boolean): CSSProperties => ({
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 10px",
+    background: active ? "rgba(94, 165, 232, 0.12)" : "transparent",
+    color: active ? "var(--color-text-bright)" : "var(--color-text)",
+    border: "1px solid",
+    borderColor: active ? "rgba(94, 165, 232, 0.28)" : "var(--color-border)",
+    borderRadius: 8,
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "all 0.15s ease",
+  }),
+
+  sidebarTerminalIndex: (active: boolean): CSSProperties => ({
+    width: 18,
+    flexShrink: 0,
+    fontSize: 10,
+    fontFamily: "var(--font-mono)",
+    color: active ? "var(--color-accent)" : "var(--color-text-dimmer)",
+  }),
+
+  sidebarTerminalMeta: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  } satisfies CSSProperties,
+
+  sidebarTerminalLabel: {
+    fontSize: 12,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 500,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+
+  sidebarTerminalHint: {
+    fontSize: 10,
+    fontFamily: "var(--font-mono)",
+    color: "var(--color-text-dimmer)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+
+  sidebarNewTerminalButton: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "9px 10px",
+    fontSize: 12,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 600,
+    color: "var(--color-text-bright)",
+    background: "rgba(94, 165, 232, 0.12)",
+    border: "1px solid rgba(94, 165, 232, 0.28)",
+    borderRadius: 8,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+
+  sidebarFooter: {
+    marginTop: "auto",
+    padding: "12px 6px 0",
+    borderTop: "1px solid var(--color-border)",
+    fontSize: 10,
+    fontFamily: "var(--font-mono)",
+    color: "var(--color-text-dimmer)",
+    lineHeight: 1.5,
+  } satisfies CSSProperties,
+
+  main: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+    minHeight: 0,
   } satisfies CSSProperties,
 
   toolbar: {
@@ -556,6 +779,8 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     onResizeSession,
     onSendInput,
     onBackToIde,
+    activeView = "terminals",
+    onNavigateView,
   } = props;
 
   const [instances, setInstances] = useState<TerminalInstance[]>(() => {
@@ -844,6 +1069,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
   const layout = useMemo(() => computeGridLayout(instances.length), [instances.length]);
   const { gridTemplateColumns, gridTemplateRows, startColResize, startRowResize } =
     useResizableGrid(layout.cols, layout.rows);
+  const focusedInstance = instances.find((instance) => instance.id === focusedId) ?? instances[0] ?? null;
 
   // ---------- Render ----------
 
@@ -852,168 +1078,252 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
 
   return (
     <div style={styles.container}>
-      {/* Toolbar */}
-      <div style={styles.toolbar}>
-        <div style={styles.toolbarLeft}>
-          {instances.map((inst, i) => (
-            <button
-              key={inst.id}
-              type="button"
-              style={styles.tab(inst.id === focusedId)}
-              onClick={() => setFocusedId(inst.id)}
-              onDoubleClick={() => startRenaming(inst.id)}
-              title={`${inst.label} (${isMacPlatform() ? "Cmd" : "Ctrl"}+${i + 1})`}
-            >
-              <span style={styles.cellIndex}>{i + 1}</span>
-              {editingLabelId === inst.id ? (
-                <input
-                  type="text"
-                  value={editingLabelValue}
-                  style={styles.labelInput}
-                  autoFocus
-                  onChange={(e) => setEditingLabelValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename();
-                    if (e.key === "Escape") {
-                      setEditingLabelId(null);
-                      setEditingLabelValue("");
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span>{inst.label}</span>
-              )}
-              {instances.length > 1 && (
+      <aside style={styles.sidebar}>
+        <div style={styles.sidebarHeader}>
+          <span style={styles.sidebarEyebrow}>Workspace Shell</span>
+          <span style={styles.sidebarTitle}>{basename(workspacePath)}</span>
+          <span style={styles.sidebarPath} title={workspacePath}>{workspacePath}</span>
+        </div>
+
+        {onNavigateView ? (
+          <div style={styles.sidebarSection}>
+            <span style={styles.sidebarSectionTitle}>Navigate</span>
+            <div style={styles.sidebarNavList}>
+              {TERMINAL_WORKSPACE_NAV_ITEMS.map((item) => {
+                const isActive = item.id === activeView;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    style={styles.sidebarNavButton(isActive)}
+                    onClick={() => onNavigateView(item.id)}
+                    title={item.label}
+                    aria-label={item.label}
+                  >
+                    <span style={styles.sidebarNavIcon} aria-hidden="true">
+                      <FontAwesomeIcon icon={item.icon} fixedWidth />
+                    </span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <div style={{ ...styles.sidebarSection, flex: 1 }}>
+          <span style={styles.sidebarSectionTitle}>Terminals</span>
+          <div style={styles.sidebarTerminalList}>
+            {instances.map((inst, i) => {
+              const isActive = inst.id === focusedId;
+              const shortcutLabel = `${isMacPlatform() ? "Cmd" : "Ctrl"}+${i + 1}`;
+
+              return (
                 <button
+                  key={inst.id}
                   type="button"
-                  style={styles.tabClose}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTerminal(inst.id);
-                  }}
-                  title="Close terminal"
+                  style={styles.sidebarTerminalButton(isActive)}
+                  onClick={() => setFocusedId(inst.id)}
+                  title={`${inst.label} (${shortcutLabel})`}
                 >
-                  ×
+                  <span style={styles.sidebarTerminalIndex(isActive)}>{i + 1}</span>
+                  <span style={styles.sidebarTerminalMeta}>
+                    <span style={styles.sidebarTerminalLabel}>{inst.label}</span>
+                    <span style={styles.sidebarTerminalHint}>
+                      {inst.terminalSnapshot?.cwd ?? cwd}
+                    </span>
+                  </span>
                 </button>
-              )}
-            </button>
-          ))}
+              );
+            })}
+          </div>
           <button
             type="button"
-            style={styles.addButton}
+            style={styles.sidebarNewTerminalButton}
             onClick={addTerminal}
             title={`New terminal (${isMacPlatform() ? "Cmd" : "Ctrl"}+T)`}
           >
-            +
+            + New Terminal
           </button>
         </div>
-        <div style={styles.toolbarRight}>
-          <span style={styles.shortcutHint}>
-            {isMacPlatform() ? "⌘T" : "Ctrl+T"} new &middot;{" "}
-            {isMacPlatform() ? "⌘W" : "Ctrl+W"} close &middot;{" "}
-            Alt+Arrow move
-          </span>
-          {onBackToIde && (
+
+        <div style={styles.sidebarFooter}>
+          <div>{connectionState === "live" ? "Daemon connected" : "Daemon offline"}</div>
+          <div>{isMacPlatform() ? "Cmd" : "Ctrl"}+T new · {isMacPlatform() ? "Cmd" : "Ctrl"}+W close</div>
+          <div>Alt+Arrow move · Ctrl+` back</div>
+        </div>
+      </aside>
+
+      <div style={styles.main}>
+        {/* Toolbar */}
+        <div style={styles.toolbar}>
+          <div style={styles.toolbarLeft}>
+            {instances.map((inst, i) => (
+              <button
+                key={inst.id}
+                type="button"
+                style={styles.tab(inst.id === focusedId)}
+                onClick={() => setFocusedId(inst.id)}
+                onDoubleClick={() => startRenaming(inst.id)}
+                title={`${inst.label} (${isMacPlatform() ? "Cmd" : "Ctrl"}+${i + 1})`}
+              >
+                <span style={styles.cellIndex}>{i + 1}</span>
+                {editingLabelId === inst.id ? (
+                  <input
+                    type="text"
+                    value={editingLabelValue}
+                    style={styles.labelInput}
+                    autoFocus
+                    onChange={(e) => setEditingLabelValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") {
+                        setEditingLabelId(null);
+                        setEditingLabelValue("");
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span>{inst.label}</span>
+                )}
+                {instances.length > 1 && (
+                  <button
+                    type="button"
+                    style={styles.tabClose}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTerminal(inst.id);
+                    }}
+                    title="Close terminal"
+                  >
+                    ×
+                  </button>
+                )}
+              </button>
+            ))}
             <button
               type="button"
-              style={styles.backButton}
-              onClick={onBackToIde}
-              title="Back to IDE (Ctrl+`)"
+              style={styles.addButton}
+              onClick={addTerminal}
+              title={`New terminal (${isMacPlatform() ? "Cmd" : "Ctrl"}+T)`}
             >
-              ← Back to IDE
+              +
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Grid */}
-      {fullscreenInstance ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <TerminalCell
-            instance={fullscreenInstance}
-            index={instances.indexOf(fullscreenInstance)}
-            focused={true}
-            fullscreen={true}
-            connectionState={connectionState}
-            cwd={cwd}
-            fontSize={fontSize}
-            shell={shell}
-            onOpenSession={onOpenSession}
-            onResizeSession={onResizeSession}
-            onSendInput={onSendInput}
-            onFocus={() => setFocusedId(fullscreenInstance.id)}
-            onClose={() => closeTerminal(fullscreenInstance.id)}
-            onToggleFullscreen={() => toggleFullscreen(fullscreenInstance.id)}
-            onStartRename={() => startRenaming(fullscreenInstance.id)}
-            showResizeCol={false}
-            showResizeRow={false}
-            onStartColResize={() => {}}
-            onStartRowResize={() => {}}
-          />
-        </div>
-      ) : (
-        <div
-          ref={gridRef}
-          data-terminal-grid
-          style={{
-            ...styles.grid,
-            gridTemplateColumns,
-            gridTemplateRows,
-          }}
-        >
-          {layout.cells.map((cell) => {
-            const inst = instances[cell.index];
-
-            if (!inst) return null;
-
-            const isFocused = inst.id === focusedId;
-            const isLastCol = cell.col + cell.colSpan >= layout.cols;
-            const isLastRow = cell.row >= layout.rows - 1;
-
-            return (
-              <div
-                key={inst.id}
-                style={{
-                  gridColumn: cell.colSpan > 1 ? `span ${cell.colSpan}` : undefined,
-                  position: "relative",
-                  minHeight: 0,
-                  minWidth: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
+          </div>
+          <div style={styles.toolbarRight}>
+            {focusedInstance ? (
+              <span style={styles.shortcutHint}>
+                {focusedInstance.label} · {basename(focusedInstance.terminalSnapshot?.cwd ?? cwd)}
+              </span>
+            ) : null}
+            <span style={styles.shortcutHint}>
+              {isMacPlatform() ? "⌘T" : "Ctrl+T"} new &middot;{" "}
+              {isMacPlatform() ? "⌘W" : "Ctrl+W"} close &middot;{" "}
+              Alt+Arrow move
+            </span>
+            {onBackToIde && (
+              <button
+                type="button"
+                style={styles.backButton}
+                onClick={onBackToIde}
+                title="Back to IDE (Ctrl+`)"
               >
-                <TerminalCell
-                  instance={inst}
-                  index={cell.index}
-                  focused={isFocused}
-                  fullscreen={false}
-                  connectionState={connectionState}
-                  cwd={cwd}
-                  fontSize={fontSize}
-                  shell={shell}
-                  onOpenSession={onOpenSession}
-                  onResizeSession={onResizeSession}
-                  onSendInput={onSendInput}
-                  onFocus={() => setFocusedId(inst.id)}
-                  onClose={() => closeTerminal(inst.id)}
-                  onToggleFullscreen={() => toggleFullscreen(inst.id)}
-                  onStartRename={() => startRenaming(inst.id)}
-                  showResizeCol={!isLastCol}
-                  showResizeRow={!isLastRow}
-                  onStartColResize={(startX, containerWidth) =>
-                    startColResize(cell.col + cell.colSpan - 1, startX, containerWidth)
-                  }
-                  onStartRowResize={(startY, containerHeight) =>
-                    startRowResize(cell.row, startY, containerHeight)
-                  }
-                />
-              </div>
-            );
-          })}
+                ← Back to IDE
+              </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Grid */}
+        {fullscreenInstance ? (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <TerminalCell
+              instance={fullscreenInstance}
+              index={instances.indexOf(fullscreenInstance)}
+              focused={true}
+              fullscreen={true}
+              connectionState={connectionState}
+              cwd={cwd}
+              fontSize={fontSize}
+              shell={shell}
+              onOpenSession={onOpenSession}
+              onResizeSession={onResizeSession}
+              onSendInput={onSendInput}
+              onFocus={() => setFocusedId(fullscreenInstance.id)}
+              onClose={() => closeTerminal(fullscreenInstance.id)}
+              onToggleFullscreen={() => toggleFullscreen(fullscreenInstance.id)}
+              onStartRename={() => startRenaming(fullscreenInstance.id)}
+              showResizeCol={false}
+              showResizeRow={false}
+              onStartColResize={() => {}}
+              onStartRowResize={() => {}}
+            />
+          </div>
+        ) : (
+          <div
+            ref={gridRef}
+            data-terminal-grid
+            style={{
+              ...styles.grid,
+              gridTemplateColumns,
+              gridTemplateRows,
+            }}
+          >
+            {layout.cells.map((cell) => {
+              const inst = instances[cell.index];
+
+              if (!inst) return null;
+
+              const isFocused = inst.id === focusedId;
+              const isLastCol = cell.col + cell.colSpan >= layout.cols;
+              const isLastRow = cell.row >= layout.rows - 1;
+
+              return (
+                <div
+                  key={inst.id}
+                  style={{
+                    gridColumn: cell.colSpan > 1 ? `span ${cell.colSpan}` : undefined,
+                    position: "relative",
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <TerminalCell
+                    instance={inst}
+                    index={cell.index}
+                    focused={isFocused}
+                    fullscreen={false}
+                    connectionState={connectionState}
+                    cwd={cwd}
+                    fontSize={fontSize}
+                    shell={shell}
+                    onOpenSession={onOpenSession}
+                    onResizeSession={onResizeSession}
+                    onSendInput={onSendInput}
+                    onFocus={() => setFocusedId(inst.id)}
+                    onClose={() => closeTerminal(inst.id)}
+                    onToggleFullscreen={() => toggleFullscreen(inst.id)}
+                    onStartRename={() => startRenaming(inst.id)}
+                    showResizeCol={!isLastCol}
+                    showResizeRow={!isLastRow}
+                    onStartColResize={(startX, containerWidth) =>
+                      startColResize(cell.col + cell.colSpan - 1, startX, containerWidth)
+                    }
+                    onStartRowResize={(startY, containerHeight) =>
+                      startRowResize(cell.row, startY, containerHeight)
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1178,4 +1488,8 @@ function TerminalCell(props: TerminalCellProps) {
 
 function isMacPlatform(): boolean {
   return typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+}
+
+function basename(filePath: string): string {
+  return filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? filePath;
 }

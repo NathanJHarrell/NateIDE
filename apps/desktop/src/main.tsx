@@ -7,9 +7,7 @@ import { App } from "./app";
 import "./styles.css";
 import "./themes.css";
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string, {
-  verbose: true,
-});
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 const rootElement = document.getElementById("root");
 

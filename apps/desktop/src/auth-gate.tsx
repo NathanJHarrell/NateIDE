@@ -23,7 +23,6 @@ export function useCurrentUser() {
 // ---------------------------------------------------------------------------
 export function AuthGate({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
-  console.log("[AUTH-GATE]", { isAuthenticated, isLoading });
 
   if (isLoading) {
     return (
@@ -57,15 +56,11 @@ function LoginForm() {
 
   async function handlePasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
-    console.log("[AUTH] handlePasswordSubmit fired", { email, flow: mode });
     setError(null);
     setSubmitting(true);
     try {
-      console.log("[AUTH] calling signIn...");
-      const result = await signIn("password", { email, password, flow: mode });
-      console.log("[AUTH] signIn result:", JSON.stringify(result));
+      await signIn("password", { email, password, flow: mode });
     } catch (err: any) {
-      console.error("[AUTH] signIn error:", err);
       setError(err?.message ?? "Authentication failed. Please try again.");
     } finally {
       setSubmitting(false);
