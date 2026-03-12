@@ -208,7 +208,14 @@ async function buildFileTree(directoryPath: string, depth = 0): Promise<FileTree
     return [];
   }
 
-  const entries = await readdir(directoryPath, { withFileTypes: true });
+  let entries;
+
+  try {
+    entries = await readdir(directoryPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
   const directories = entries
     .filter((entry) => entry.isDirectory() && !shouldSkipDirectory(entry.name))
     .sort((left, right) => sortNames(left.name, right.name))
@@ -253,7 +260,14 @@ async function collectPreviewFilePaths(
       return;
     }
 
-    const entries = await readdir(directoryPath, { withFileTypes: true });
+    let entries;
+
+    try {
+      entries = await readdir(directoryPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
     const sorted = entries.sort((left, right) => {
       if (left.isDirectory() !== right.isDirectory()) {
         return left.isDirectory() ? -1 : 1;
@@ -365,11 +379,11 @@ export async function buildWorkspaceContext(
 ): Promise<{ workspace: Workspace; workspaceSnapshot: WorkspaceSnapshot }> {
   const rootPath = await resolveWorkspacePath(workspacePath);
   const git = await readGitDetails(rootPath);
-  const documents = await Promise.all(
+  const documents = (await Promise.allSettled(
     (await collectPreviewFilePaths(rootPath)).map((filePath) =>
       openWorkspaceDocument(rootPath, filePath),
     ),
-  );
+  )).flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
 
   return {
     workspace: {

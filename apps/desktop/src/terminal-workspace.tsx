@@ -1078,43 +1078,39 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
 
   return (
     <div style={styles.container}>
-      <aside style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <span style={styles.sidebarEyebrow}>Workspace Shell</span>
-          <span style={styles.sidebarTitle}>{basename(workspacePath)}</span>
-          <span style={styles.sidebarPath} title={workspacePath}>{workspacePath}</span>
+      {onNavigateView ? (
+        <aside className="activity-bar terminal-activity-bar">
+          <div className="activity-bar-top">
+            {TERMINAL_WORKSPACE_NAV_ITEMS.map((item) => {
+              const isActive = item.id === activeView;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`activity-bar-item ${isActive ? "activity-bar-item-active" : ""}`}
+                  onClick={() => onNavigateView(item.id)}
+                  title={item.label}
+                  aria-label={item.label}
+                >
+                  <FontAwesomeIcon icon={item.icon} fixedWidth />
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+      ) : null}
+
+      <aside className="terminal-sidebar-panel">
+        <div className="terminal-sidebar-header">
+          <span className="terminal-sidebar-eyebrow">Workspace Shell</span>
+          <span className="terminal-sidebar-title">{basename(workspacePath)}</span>
+          <span className="terminal-sidebar-path" title={workspacePath}>{workspacePath}</span>
         </div>
 
-        {onNavigateView ? (
-          <div style={styles.sidebarSection}>
-            <span style={styles.sidebarSectionTitle}>Navigate</span>
-            <div style={styles.sidebarNavList}>
-              {TERMINAL_WORKSPACE_NAV_ITEMS.map((item) => {
-                const isActive = item.id === activeView;
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    style={styles.sidebarNavButton(isActive)}
-                    onClick={() => onNavigateView(item.id)}
-                    title={item.label}
-                    aria-label={item.label}
-                  >
-                    <span style={styles.sidebarNavIcon} aria-hidden="true">
-                      <FontAwesomeIcon icon={item.icon} fixedWidth />
-                    </span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        <div style={{ ...styles.sidebarSection, flex: 1 }}>
-          <span style={styles.sidebarSectionTitle}>Terminals</span>
-          <div style={styles.sidebarTerminalList}>
+        <div className="terminal-sidebar-section terminal-sidebar-section-grow">
+          <span className="terminal-sidebar-section-title">Terminals</span>
+          <div className="terminal-session-list">
             {instances.map((inst, i) => {
               const isActive = inst.id === focusedId;
               const shortcutLabel = `${isMacPlatform() ? "Cmd" : "Ctrl"}+${i + 1}`;
@@ -1123,14 +1119,14 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
                 <button
                   key={inst.id}
                   type="button"
-                  style={styles.sidebarTerminalButton(isActive)}
+                  className={`terminal-session-button ${isActive ? "terminal-session-button-active" : ""}`}
                   onClick={() => setFocusedId(inst.id)}
                   title={`${inst.label} (${shortcutLabel})`}
                 >
-                  <span style={styles.sidebarTerminalIndex(isActive)}>{i + 1}</span>
-                  <span style={styles.sidebarTerminalMeta}>
-                    <span style={styles.sidebarTerminalLabel}>{inst.label}</span>
-                    <span style={styles.sidebarTerminalHint}>
+                  <span className={`terminal-session-index ${isActive ? "terminal-session-index-active" : ""}`}>{i + 1}</span>
+                  <span className="terminal-session-meta">
+                    <span className="terminal-session-label">{inst.label}</span>
+                    <span className="terminal-session-hint">
                       {inst.terminalSnapshot?.cwd ?? cwd}
                     </span>
                   </span>
@@ -1140,7 +1136,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
           </div>
           <button
             type="button"
-            style={styles.sidebarNewTerminalButton}
+            className="terminal-session-new"
             onClick={addTerminal}
             title={`New terminal (${isMacPlatform() ? "Cmd" : "Ctrl"}+T)`}
           >
@@ -1148,7 +1144,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
           </button>
         </div>
 
-        <div style={styles.sidebarFooter}>
+        <div className="terminal-sidebar-footer">
           <div>{connectionState === "live" ? "Daemon connected" : "Daemon offline"}</div>
           <div>{isMacPlatform() ? "Cmd" : "Ctrl"}+T new · {isMacPlatform() ? "Cmd" : "Ctrl"}+W close</div>
           <div>Alt+Arrow move · Ctrl+` back</div>

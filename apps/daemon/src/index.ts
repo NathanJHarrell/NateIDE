@@ -30,6 +30,36 @@ type JsonReply = {
   status: number;
 };
 
+function statusForWorkspaceError(error: unknown): number {
+  if (!(error instanceof Error)) {
+    return 500;
+  }
+
+  if (
+    error.message.includes("no such file or directory") ||
+    error.message.includes("ENOENT")
+  ) {
+    return 404;
+  }
+
+  if (
+    error.message.includes("not a directory") ||
+    error.message.includes("outside the current workspace")
+  ) {
+    return 400;
+  }
+
+  if (
+    error.message.includes("permission denied") ||
+    error.message.includes("EACCES") ||
+    error.message.includes("EPERM")
+  ) {
+    return 403;
+  }
+
+  return 500;
+}
+
 function json(body: unknown, status = 200): JsonReply {
   return {
     status,
@@ -90,7 +120,10 @@ const server = createServer(async (request, response) => {
           ok: true,
           mode: "local",
           port,
+          platform: process.platform,
+          userHome,
           workspaceRoot,
+          workspaceRoots,
         }),
       );
       return;
@@ -167,7 +200,12 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      writeJson(response, json(await store.openWorkspace(targetPath)));
+      try {
+        writeJson(response, json(await store.openWorkspace(targetPath)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        writeJson(response, json({ ok: false, message }, statusForWorkspaceError(error)));
+      }
       return;
     }
 
@@ -190,8 +228,13 @@ const server = createServer(async (request, response) => {
       }
       resolvedPath = path.resolve(resolvedPath);
 
-      await mkdir(resolvedPath, { recursive: true });
-      writeJson(response, json(await store.openWorkspace(resolvedPath)));
+      try {
+        await mkdir(resolvedPath, { recursive: true });
+        writeJson(response, json(await store.openWorkspace(resolvedPath)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        writeJson(response, json({ ok: false, message }, statusForWorkspaceError(error)));
+      }
       return;
     }
 

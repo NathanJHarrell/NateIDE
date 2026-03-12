@@ -9,6 +9,15 @@ type ProjectLauncherProps = {
   workspaceCandidates: WorkspaceCandidate[];
 };
 
+function joinPath(parent: string, name: string): string {
+  if (parent.endsWith("/") || parent.endsWith("\\")) {
+    return `${parent}${name}`;
+  }
+
+  const separator = /^[a-zA-Z]:\\/.test(parent) || parent.includes("\\") ? "\\" : "/";
+  return `${parent}${separator}${name}`;
+}
+
 export function ProjectLauncher(props: ProjectLauncherProps) {
   const { onClose, onCreateProject, onOpenProject, open, workspaceCandidates } = props;
   const [mode, setMode] = useState<"existing" | "create">("existing");
@@ -122,9 +131,7 @@ export function ProjectLauncher(props: ProjectLauncherProps) {
                 return;
               }
 
-              const fullPath = parent.endsWith("/")
-                ? `${parent}${name}`
-                : `${parent}/${name}`;
+              const fullPath = joinPath(parent, name);
 
               setIsBusy(true);
 
@@ -158,9 +165,7 @@ export function ProjectLauncher(props: ProjectLauncherProps) {
             <div className="launcher-preview">
               {createParent.trim() && createName.trim() && (
                 <span className="launcher-preview-path">
-                  {createParent.trim().endsWith("/")
-                    ? `${createParent.trim()}${createName.trim()}`
-                    : `${createParent.trim()}/${createName.trim()}`}
+                  {joinPath(createParent.trim(), createName.trim())}
                 </span>
               )}
             </div>

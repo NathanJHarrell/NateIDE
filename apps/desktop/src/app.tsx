@@ -109,7 +109,6 @@ import {
 // ---------------------------------------------------------------------------
 
 const API_ROOT = "/api";
-const FALLBACK_ROOT = "/home/nate/nateide";
 const PROJECT_TABS_STORAGE_KEY = "nateide.project-tabs.v1";
 const SHELL_LAYOUT_STORAGE_KEY = "nateide.shell-layout.v1";
 const SHELL_ZONES: ShellZone[] = ["left", "center", "right", "bottom"];
@@ -149,6 +148,27 @@ type ProjectTab = {
   name: string;
   path: string;
 };
+
+type HealthResponse = {
+  mode: string;
+  ok: boolean;
+  platform?: string;
+  port: number;
+  userHome?: string;
+  workspaceRoot: string;
+  workspaceRoots?: string[];
+};
+
+const SUPPORTED_VIEWS: AppView[] = [
+  "workspace",
+  "kanban",
+  "settings",
+  "pipelines",
+  "souls",
+  "discovery",
+  "profile",
+  "terminals",
+];
 
 const VIEW_ICONS: Record<AppView, IconDefinition> = {
   workspace: faDesktop,
@@ -191,6 +211,36 @@ function dirname(filePath: string): string {
   return normalized.slice(0, lastSlash);
 }
 
+function isWindowsClient(): boolean {
+  return typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+}
+
+function isWindowsPath(filePath: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("\\\\");
+}
+
+function isCrossPlatformStalePath(filePath: string): boolean {
+  const trimmed = filePath.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  return isWindowsClient() ? trimmed.startsWith("/") : isWindowsPath(trimmed);
+}
+
+function guessFallbackRoot(): string {
+  if (isWindowsClient()) {
+    return "C:\\";
+  }
+
+  if (typeof navigator !== "undefined" && /Macintosh|Mac OS X/i.test(navigator.userAgent)) {
+    return "/Users";
+  }
+
+  return "~/";
+}
+
 function loadProjectTabs(): ProjectTab[] {
   if (typeof window === "undefined") {
     return [];
@@ -204,7 +254,20 @@ function loadProjectTabs(): ProjectTab[] {
     }
 
     const parsed = JSON.parse(raw) as ProjectTab[];
-    return Array.isArray(parsed) ? parsed : [];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((tab): tab is ProjectTab =>
+        Boolean(tab) &&
+        typeof tab === "object" &&
+        typeof tab.name === "string" &&
+        typeof tab.path === "string" &&
+        !isCrossPlatformStalePath(tab.path),
+      )
+      .slice(0, 8);
   } catch {
     return [];
   }
@@ -215,7 +278,7 @@ function saveProjectTabs(tabs: ProjectTab[]) {
     return;
   }
 
-  window.localStorage.setItem(PROJECT_TABS_STORAGE_KEY, JSON.stringify(tabs));
+  window.localStorage.setItem(PROJECT_TABS_STORAGE_KEY, JSON.stringify(tabs.slice(0, 8)));
 }
 
 function loadShellLayout(): ShellLayout | null {
@@ -1219,15 +1282,16 @@ function AppContent() {
     }
 
     const requestedView = new URL(window.location.href).searchParams.get("view");
-    return requestedView === "kanban" || requestedView === "settings"
-      ? requestedView
+    return SUPPORTED_VIEWS.includes(requestedView as AppView)
+      ? (requestedView as AppView)
       : "workspace";
   });
   const [projectTabs, setProjectTabs] = useState<ProjectTab[]>(() => loadProjectTabs());
   const [shellLayout, setShellLayout] = useState<ShellLayout | null>(null);
   const [settings, setSettings] = useState<IdeSettings>(DEFAULT_SETTINGS);
   const [workspaces, setWorkspaces] = useState<WorkspaceCandidate[]>([]);
-  const [workspacePath, setWorkspacePath] = useState(FALLBACK_ROOT);
+  const [workspacePath, setWorkspacePath] = useState(() => loadProjectTabs()[0]?.path ?? guessFallbackRoot());
+  const [daemonPaths, setDaemonPaths] = useState({ homePath: "", workspaceRoot: "" });
   const [messageDraft, setMessageDraft] = useState(
     "Have Claude route this change, let Codex implement the shell, and ask Gemini to review terminal attribution.",
   );
@@ -1366,49 +1430,54 @@ function AppContent() {
 
     async function probe() {
       try {
-        const res = await fetch(`${API_ROOT}/health`);
-        if (cancelled) return;
-        if (res.ok) {
-          const [candidates, ideSettings] = await Promise.all([
-            requestJson<WorkspaceCandidate[]>("/workspaces"),
-            requestJson<IdeSettings>("/settings"),
-          ]);
-          let session: ThreadBootstrap | null = null;
+        const health = await requestJson<HealthResponse>("/health");
+        if (cancelled || !health.ok) return;
 
-          try {
-            session = await requestJson<ThreadBootstrap>("/session");
-          } catch (error) {
-            if (!isNoSessionOpenError(error)) {
-              throw error;
-            }
+        const [candidates, ideSettings] = await Promise.all([
+          requestJson<WorkspaceCandidate[]>("/workspaces"),
+          requestJson<IdeSettings>("/settings"),
+        ]);
+        let session: ThreadBootstrap | null = null;
 
-            const initialPath = candidates[0]?.path ?? FALLBACK_ROOT;
-            session = await requestJson<ThreadBootstrap>("/workspace/open", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ path: initialPath }),
-            });
+        try {
+          session = await requestJson<ThreadBootstrap>("/session");
+        } catch (error) {
+          if (!isNoSessionOpenError(error)) {
+            throw error;
           }
 
-          if (cancelled) return;
-
-          startTransition(() => {
-            setConnectionState("live");
-            setWorkspaces(candidates);
-            setSettings(ideSettings);
-            setNotice("");
+          const initialPath = candidates[0]?.path
+            ?? health.userHome
+            ?? health.workspaceRoot
+            ?? guessFallbackRoot();
+          session = await requestJson<ThreadBootstrap>("/workspace/open", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ path: initialPath }),
           });
-          applyBootstrap(session);
-        } else {
-          throw new Error("Daemon not healthy");
         }
+
+        if (cancelled) return;
+
+        startTransition(() => {
+          setConnectionState("live");
+          setDaemonPaths({
+            homePath: health.userHome ?? "",
+            workspaceRoot: health.workspaceRoot,
+          });
+          setWorkspaces(candidates);
+          setSettings(ideSettings);
+          setNotice("");
+        });
+        applyBootstrap(session);
       } catch (error) {
         if (cancelled) return;
+        const fallbackPath = projectTabs[0]?.path ?? guessFallbackRoot();
         startTransition(() => {
-          const demo = createDemoThreadBootstrap(FALLBACK_ROOT);
+          const demo = createDemoThreadBootstrap(fallbackPath);
           upsertSession(demo);
-          setActiveProjectPath(FALLBACK_ROOT);
-          setWorkspacePath(FALLBACK_ROOT);
+          setActiveProjectPath(fallbackPath);
+          setWorkspacePath(fallbackPath);
           setConnectionState("fallback");
           setNotice(getErrorMessage(error));
         });
@@ -1437,7 +1506,8 @@ function AppContent() {
     (r) => r.status === "streaming" || r.status === "starting",
   );
   const sessionTokenUsage = (currentBootstrap as { sessionTokenUsage?: TokenUsage } | null)?.sessionTokenUsage;
-  const activeWorkspaceRoot = currentBootstrap?.workspace.rootPath ?? FALLBACK_ROOT;
+  const activeWorkspaceRoot =
+    (currentBootstrap?.workspace.rootPath ?? workspacePath) || guessFallbackRoot();
   const interactiveTerminal =
     currentBootstrap?.workspaceSnapshot.terminals.find((terminal) => terminal.id === "terminal-main") ??
     null;
@@ -1948,6 +2018,22 @@ function AppContent() {
                 onChange={(event) => setWorkspacePath(event.target.value)}
                 placeholder="Type a workspace path"
               />
+              {daemonPaths.homePath ? (
+                <button
+                  type="button"
+                  className="action-button action-button-secondary"
+                  onClick={() => setWorkspacePath(daemonPaths.homePath)}
+                >
+                  Home
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="action-button action-button-secondary"
+                onClick={() => setIsProjectLauncherOpen(true)}
+              >
+                Browse
+              </button>
               <button className="action-button" type="submit" disabled={isSubmittingWorkspace}>
                 {isSubmittingWorkspace ? "Opening..." : "Open"}
               </button>
@@ -2605,6 +2691,42 @@ function AppContent() {
                       onClick={() => setIsProjectLauncherOpen(true)}
                     >
                       +
+                    </button>
+                  </div>
+
+                  <div className="workspace-social-strip">
+                    <button
+                      type="button"
+                      className="workspace-social-card"
+                      onClick={() => setView("discovery")}
+                    >
+                      <span className="workspace-social-icon" aria-hidden="true">
+                        <FontAwesomeIcon icon={VIEW_ICONS.discovery} fixedWidth />
+                      </span>
+                      <span className="workspace-social-copy">
+                        <span className="workspace-social-title">Discover the community</span>
+                        <span className="workspace-social-description">
+                          Browse public projects, pipelines, harnesses, and soul documents.
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="workspace-social-card"
+                      onClick={() => {
+                        setProfileUserId(userId);
+                        setView("profile");
+                      }}
+                    >
+                      <span className="workspace-social-icon" aria-hidden="true">
+                        <FontAwesomeIcon icon={VIEW_ICONS.profile} fixedWidth />
+                      </span>
+                      <span className="workspace-social-copy">
+                        <span className="workspace-social-title">Build your profile</span>
+                        <span className="workspace-social-description">
+                          Update your bio, review published work, and manage starred artifacts.
+                        </span>
+                      </span>
                     </button>
                   </div>
 

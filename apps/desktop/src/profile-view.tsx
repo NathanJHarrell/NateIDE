@@ -325,13 +325,49 @@ function getInitials(name?: string): string {
     .join("");
 }
 
+function formatVisibilityLabel(visibility?: "private" | "workspace" | "public"): string {
+  switch (visibility) {
+    case "public":
+      return "Public";
+    case "workspace":
+      return "Workspace";
+    default:
+      return "Private";
+  }
+}
+
+function formatDateLabel(value?: number | string): string {
+  if (!value) {
+    return "No date";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "No date";
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
 function ArtifactCard({ artifact }: { artifact: any }) {
-  const typeKey = (artifact.type ?? "project") as string;
+  const typeKey = (artifact.type ?? artifact.targetType ?? "project") as string;
   const c = TYPE_COLORS[typeKey] ?? TYPE_COLORS.project;
+  const displayName =
+    artifact.name
+    ?? `${artifact.targetType ?? artifact.type ?? "artifact"} ${artifact.targetId ?? ""}`.trim();
+  const description =
+    artifact.description
+    ?? (artifact.targetId ? `Saved target ${artifact.targetId}` : undefined);
+  const tags = Array.isArray(artifact.tags) ? artifact.tags : [];
 
   return (
     <div style={styles.card}>
@@ -339,14 +375,14 @@ function ArtifactCard({ artifact }: { artifact: any }) {
         <span style={{ ...styles.typeBadge, background: c.bg, color: c.fg }}>
           {typeKey}
         </span>
-        <h4 style={styles.cardName}>{artifact.name ?? "Untitled"}</h4>
+        <h4 style={styles.cardName}>{displayName}</h4>
       </div>
-      {artifact.description && (
-        <p style={styles.cardDesc}>{artifact.description}</p>
+      {description && (
+        <p style={styles.cardDesc}>{description}</p>
       )}
-      {artifact.tags && artifact.tags.length > 0 && (
+      {tags.length > 0 && (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {artifact.tags.map((t: string) => (
+          {tags.map((t: string) => (
             <span
               key={t}
               style={{
@@ -437,14 +473,56 @@ export function ProfileView({ userId, isOwnProfile }: ProfileViewProps) {
 
   // Stats
   const projectCount = myProjects?.length ?? 0;
+  const publicArtifactCount =
+    (publicArtifacts?.projects?.length ?? 0) + (publicArtifacts?.harnesses?.length ?? 0);
   const starsGiven = userStars?.length ?? 0;
-  const starsReceived = 0;
+  const checklistItems = [
+    !profile.displayName ? "Add a display name" : null,
+    !profile.handle ? "Claim a handle" : null,
+    !profile.bio ? "Write a short bio" : null,
+    !profile.avatarUrl ? "Upload an avatar" : null,
+    profile.profileVisibility !== "public" ? "Switch visibility to public when you're ready" : null,
+  ].filter((item): item is string => Boolean(item));
+  const profileCompletion = Math.round(((5 - checklistItems.length) / 5) * 100);
+  const joinedAt = profile._creationTime ?? undefined;
+  const recentActivity = [
+    ...(myProjects ?? []).map((project) => ({
+      id: `project-${project._id}`,
+      kind: "Project",
+      title: project.name ?? "Untitled project",
+      description: project.description ?? "Workspace project",
+      ts: project.updatedAt ?? project.createdAt ?? project._creationTime ?? 0,
+    })),
+    ...((publicArtifacts?.projects ?? []).map((project) => ({
+      id: `public-project-${project._id}`,
+      kind: "Public Project",
+      title: project.name ?? "Untitled public project",
+      description: project.description ?? "Published to discovery",
+      ts: project.updatedAt ?? project.createdAt ?? project._creationTime ?? 0,
+    }))),
+    ...((publicArtifacts?.harnesses ?? []).map((harness) => ({
+      id: `public-harness-${harness._id}`,
+      kind: "Public Harness",
+      title: harness.name ?? "Untitled harness",
+      description: harness.description ?? "Published harness",
+      ts: harness.updatedAt ?? harness.createdAt ?? harness._creationTime ?? 0,
+    }))),
+    ...(userStars ?? []).map((star) => ({
+      id: `star-${star._id}`,
+      kind: "Star",
+      title: `Starred ${star.targetType}`,
+      description: star.targetId,
+      ts: star.createdAt ?? star._creationTime ?? 0,
+    })),
+  ]
+    .sort((left, right) => right.ts - left.ts)
+    .slice(0, 6);
 
   // Tabs config
   const tabs: { key: TabKey; label: string }[] = [
-    { key: "projects", label: "Projects" },
-    { key: "public", label: "Public Artifacts" },
-    { key: "starred", label: "Starred" },
+    { key: "projects", label: `Projects (${projectCount})` },
+    { key: "public", label: `Public Artifacts (${publicArtifactCount})` },
+    { key: "starred", label: `Starred (${starsGiven})` },
   ];
 
   // Current tab data
@@ -559,13 +637,111 @@ export function ProfileView({ userId, isOwnProfile }: ProfileViewProps) {
           <span style={styles.statLabel}>Projects</span>
         </div>
         <div style={styles.statItem}>
+          <span style={styles.statValue}>{publicArtifactCount}</span>
+          <span style={styles.statLabel}>Public Items</span>
+        </div>
+        <div style={styles.statItem}>
           <span style={styles.statValue}>{starsGiven}</span>
           <span style={styles.statLabel}>Stars Given</span>
         </div>
         <div style={styles.statItem}>
-          <span style={styles.statValue}>{starsReceived}</span>
-          <span style={styles.statLabel}>Stars Received</span>
+          <span style={styles.statValue}>{formatVisibilityLabel(profile.profileVisibility)}</span>
+          <span style={styles.statLabel}>Visibility</span>
         </div>
+      </div>
+
+      <div style={{ ...styles.grid, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        <div style={styles.card}>
+          <span style={styles.cardMeta}>Profile Completion</span>
+          <h3 style={styles.cardName}>{profileCompletion}% ready</h3>
+          <p style={styles.cardDesc}>
+            {checklistItems.length > 0
+              ? checklistItems[0]
+              : "Your profile is ready to share across discovery surfaces."}
+          </p>
+        </div>
+        <div style={styles.card}>
+          <span style={styles.cardMeta}>Member Since</span>
+          <h3 style={styles.cardName}>{formatDateLabel(joinedAt)}</h3>
+          <p style={styles.cardDesc}>
+            {profile.handle
+              ? `People can find you at @${profile.handle}.`
+              : "Add a handle so other builders can mention and find you."}
+          </p>
+        </div>
+        <div style={styles.card}>
+          <span style={styles.cardMeta}>Publishing Snapshot</span>
+          <h3 style={styles.cardName}>
+            {publicArtifactCount > 0 ? `${publicArtifactCount} live artifacts` : "Nothing public yet"}
+          </h3>
+          <p style={styles.cardDesc}>
+            {publicArtifactCount > 0
+              ? "Discovery can surface your public projects and harnesses."
+              : "Publish a project or harness to start building a public footprint."}
+          </p>
+        </div>
+      </div>
+
+      {isOwnProfile && checklistItems.length > 0 ? (
+        <div style={{ ...styles.card, gap: 10 }}>
+          <div>
+            <span style={styles.cardMeta}>Profile Checklist</span>
+            <h3 style={{ ...styles.cardName, marginTop: 4 }}>Finish your creator page</h3>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {checklistItems.map((item) => (
+              <div
+                key={item}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "var(--color-panel)",
+                  color: "var(--color-text)",
+                  fontSize: 13,
+                }}
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ ...styles.card, gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div>
+            <span style={styles.cardMeta}>Recent Activity</span>
+            <h3 style={{ ...styles.cardName, marginTop: 4 }}>What this profile has been doing</h3>
+          </div>
+          <span style={styles.cardMeta}>{recentActivity.length} recent items</span>
+        </div>
+        {recentActivity.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {recentActivity.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-panel)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                  <span style={styles.cardName}>{item.title}</span>
+                  <span style={styles.cardMeta}>{formatDateLabel(item.ts)}</span>
+                </div>
+                <span style={styles.cardMeta}>{item.kind}</span>
+                <p style={{ ...styles.cardDesc, WebkitLineClamp: "unset" }}>{item.description}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={styles.emptyState}>No profile activity yet. Start a project or star something to seed this feed.</div>
+        )}
       </div>
 
       {/* Tabs */}
