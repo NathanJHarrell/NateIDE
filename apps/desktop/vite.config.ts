@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  envPrefix: ["VITE_", "CONVEX_"],
   server: {
     port: 3001,
     fs: {
