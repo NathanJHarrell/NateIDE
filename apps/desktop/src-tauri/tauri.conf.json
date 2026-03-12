@@ -10,7 +10,6 @@
     "beforeBuildCommand": "bun run build"
   },
   "app": {
-    "title": "NateIDE",
     "windows": [
       {
         "title": "NateIDE",
