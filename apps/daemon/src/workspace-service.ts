@@ -76,7 +76,7 @@ type GitDetails = {
 };
 
 function expandHome(inputPath: string): string {
-  const home = process.env.HOME;
+  const home = process.env.HOME ?? process.env.USERPROFILE;
 
   if (!home || inputPath === "") {
     return inputPath;
@@ -86,7 +86,7 @@ function expandHome(inputPath: string): string {
     return home;
   }
 
-  if (inputPath.startsWith("~/")) {
+  if (inputPath.startsWith("~/") || inputPath.startsWith("~\\")) {
     return path.join(home, inputPath.slice(2));
   }
 

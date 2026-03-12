@@ -14,9 +14,11 @@ import { PipelineStore } from "./pipeline-store";
 import { executePipeline, type PipelineCallbacks } from "./pipeline-engine";
 
 const port = Number(process.env.PORT ?? 4317);
-const workspaceRoot = process.env.WORKSPACE_ROOT ?? "/home/nate/nateide";
-const workspaceRoots = (process.env.WORKSPACE_ROOTS ?? `${workspaceRoot}:${process.env.HOME ?? ""}`)
-  .split(":")
+const userHome = process.env.HOME ?? process.env.USERPROFILE ?? "";
+const defaultWorkspaceRoot = path.resolve(process.cwd(), "../..");
+const workspaceRoot = process.env.WORKSPACE_ROOT ?? defaultWorkspaceRoot;
+const workspaceRoots = (process.env.WORKSPACE_ROOTS ?? [workspaceRoot, userHome].filter(Boolean).join(path.delimiter))
+  .split(path.delimiter)
   .filter(Boolean);
 const settingsStore = new SettingsStore();
 const pipelineStore = new PipelineStore();
@@ -179,11 +181,11 @@ const server = createServer(async (request, response) => {
       }
 
       // Expand ~ to $HOME and resolve to absolute path
-      const home = process.env.HOME ?? "";
+      const home = userHome;
       let resolvedPath = rawPath;
       if (resolvedPath === "~") {
         resolvedPath = home;
-      } else if (resolvedPath.startsWith("~/")) {
+      } else if (home && (resolvedPath.startsWith("~/") || resolvedPath.startsWith("~\\"))) {
         resolvedPath = path.join(home, resolvedPath.slice(2));
       }
       resolvedPath = path.resolve(resolvedPath);
