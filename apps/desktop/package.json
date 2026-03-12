@@ -7,9 +7,9 @@
     "build": "bunx vite build",
     "dev": "bunx vite",
     "preview": "bunx vite preview",
-    "tauri": "cargo tauri",
-    "tauri:dev": "cargo tauri dev",
-    "tauri:build": "cargo tauri build"
+    "tauri": "bunx tauri",
+    "tauri:dev": "bunx tauri dev",
+    "tauri:build": "bunx tauri build"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.1.0",

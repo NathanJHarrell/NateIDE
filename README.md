@@ -129,11 +129,19 @@ git clone https://github.com/NathanJHarrell/NateIDE
 # Install dependencies
 bun install
 
+# Configure the desktop app
+cp .env.example .env.local
+# or, if you run the desktop app directly:
+cp apps/desktop/.env.example apps/desktop/.env.local
+
 # Run the desktop app
 bun run dev
 ```
 
 > Requires [Bun](https://bun.sh/) v1.x+
+>
+> Set the value in either example file to your Convex deployment URL, for example
+> `https://precise-gopher-800.convex.cloud`.
 
 ---
 
