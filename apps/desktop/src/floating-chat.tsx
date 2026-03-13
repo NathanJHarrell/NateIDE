@@ -34,6 +34,22 @@ type DragState = {
   originY: number;
 };
 
+type WorkflowContext = {
+  currentView: string;
+  activeProjectPath?: string;
+};
+
+const PAGE_CONTEXT_HINTS: Record<string, string> = {
+  workspace: "The user is in the main code editor workspace. They may need help with code, files, or git operations.",
+  kanban: "The user is viewing the Kanban board for task management. They may want help creating, organizing, or prioritizing tasks.",
+  settings: "The user is on the Settings page configuring IDE preferences, agent roles, or API keys.",
+  pipelines: "The user is in the Pipeline Editor, designing DAG-based agent/tool orchestration workflows with nodes and edges. Help them build effective custom pipelines.",
+  souls: "The user is editing Soul Documents that define agent personality and behavior guidelines.",
+  discovery: "The user is browsing the Discovery page, exploring public projects, harnesses, pipelines, and souls shared by the community.",
+  profile: "The user is viewing their profile page with their projects, harnesses, and social activity.",
+  terminals: "The user is in the multi-terminal workspace managing shell sessions.",
+};
+
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -442,8 +458,10 @@ function extractMessages(events: unknown[] | undefined | null): ChatMessage[] {
 
 export function FloatingChat({
   workspaceId,
+  workflowContext,
 }: {
   workspaceId?: Id<"workspaces">;
+  workflowContext?: WorkflowContext;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -624,6 +642,13 @@ export function FloatingChat({
             messageId: crypto.randomUUID(),
             content: trimmed,
             format: "markdown",
+            ...(workflowContext && {
+              workflowContext: {
+                currentView: workflowContext.currentView,
+                activeProjectPath: workflowContext.activeProjectPath,
+                pageHint: PAGE_CONTEXT_HINTS[workflowContext.currentView] ?? "",
+              },
+            }),
           },
         });
       } catch {
@@ -631,7 +656,7 @@ export function FloatingChat({
         setInputValue(trimmed);
       }
     },
-    [inputValue, selectedThreadId, workspaceId, appendEvent, createThread],
+    [inputValue, selectedThreadId, workspaceId, appendEvent, createThread, workflowContext],
   );
 
   // Handle Enter to send (Shift+Enter for newline)

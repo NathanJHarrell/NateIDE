@@ -36,6 +36,9 @@ export type IdeSettings = {
     fontSize: number;
     shell: string;
   };
+  monitorWorkflow: {
+    enabled: boolean;
+  };
 };
 
 export type IdeSettingsPatch = {
@@ -45,6 +48,7 @@ export type IdeSettingsPatch = {
   conversationLoop?: Partial<IdeSettings["conversationLoop"]>;
   appearance?: Partial<IdeSettings["appearance"]>;
   terminal?: Partial<IdeSettings["terminal"]>;
+  monitorWorkflow?: Partial<IdeSettings["monitorWorkflow"]>;
 };
 
 const DEFAULT_SETTINGS: IdeSettings = {
@@ -119,6 +123,9 @@ const DEFAULT_SETTINGS: IdeSettings = {
     fontSize: 14,
     shell: process.env.SHELL ?? "bash",
   },
+  monitorWorkflow: {
+    enabled: false,
+  },
 };
 
 function settingsPath(): string {
@@ -178,6 +185,10 @@ export class SettingsStore {
           ...DEFAULT_SETTINGS.terminal,
           ...parsed.terminal,
         },
+        monitorWorkflow: {
+          ...DEFAULT_SETTINGS.monitorWorkflow,
+          ...(parsed.monitorWorkflow ?? {}),
+        },
       };
     } catch {
       this.cache = structuredClone(DEFAULT_SETTINGS);
@@ -222,6 +233,10 @@ export class SettingsStore {
       terminal: {
         ...current.terminal,
         ...patch.terminal,
+      },
+      monitorWorkflow: {
+        ...current.monitorWorkflow,
+        ...patch.monitorWorkflow,
       },
     };
 

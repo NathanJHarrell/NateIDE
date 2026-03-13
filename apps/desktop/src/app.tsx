@@ -63,6 +63,7 @@ import { PipelineEditor } from "./pipeline-editor";
 import { TerminalPane } from "./terminal-pane";
 import { AuthGate, useCurrentUser } from "./auth-gate";
 import { FloatingChat } from "./floating-chat";
+import { FloatingPanel } from "./floating-panel";
 import { TerminalWorkspace } from "./terminal-workspace";
 import { SoulEditor } from "./soul-editor";
 import { MemberPanel } from "./member-panel";
@@ -118,6 +119,7 @@ const API_ROOT_CANDIDATES = [
 let resolvedApiRoot: string | null = null;
 const PROJECT_TABS_STORAGE_KEY = "nateide.project-tabs.v1";
 const SHELL_LAYOUT_STORAGE_KEY = "nateide.shell-layout.v1";
+const ZONE_SIZES_STORAGE_KEY = "nateide.zone-sizes.v1";
 const SHELL_ZONES: ShellZone[] = ["left", "center", "right", "bottom"];
 const DEFAULT_SETTINGS: IdeSettings = {
   apiKeys: {
@@ -147,6 +149,9 @@ const DEFAULT_SETTINGS: IdeSettings = {
     fontSize: 14,
     shell: "bash",
   },
+  monitorWorkflow: {
+    enabled: false,
+  },
 };
 
 type ConnectionState = "loading" | "live" | "fallback";
@@ -164,6 +169,13 @@ type HealthResponse = {
   userHome?: string;
   workspaceRoot: string;
   workspaceRoots?: string[];
+};
+
+type FloatingPanelState = {
+  id: string;
+  viewType: AppView | string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
 };
 
 const SUPPORTED_VIEWS: AppView[] = [
@@ -1387,9 +1399,53 @@ function AppContent() {
     bottom: "terminal",
   });
   const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
-  const [colLeftPx, setColLeftPx] = useState<number>(240);
-  const [colRightPx, setColRightPx] = useState<number>(420);
-  const [rowBottomPx, setRowBottomPx] = useState<number>(200);
+  const [colLeftPx, setColLeftPx] = useState<number>(() => {
+    try { const s = localStorage.getItem(ZONE_SIZES_STORAGE_KEY); if (s) { const p = JSON.parse(s); if (typeof p.left === "number") return p.left; } } catch { /* ignore */ }
+    return 240;
+  });
+  const [colRightPx, setColRightPx] = useState<number>(() => {
+    try { const s = localStorage.getItem(ZONE_SIZES_STORAGE_KEY); if (s) { const p = JSON.parse(s); if (typeof p.right === "number") return p.right; } } catch { /* ignore */ }
+    return 420;
+  });
+  const [rowBottomPx, setRowBottomPx] = useState<number>(() => {
+    try { const s = localStorage.getItem(ZONE_SIZES_STORAGE_KEY); if (s) { const p = JSON.parse(s); if (typeof p.bottom === "number") return p.bottom; } } catch { /* ignore */ }
+    return 200;
+  });
+  const [floatingPanels, setFloatingPanels] = useState<FloatingPanelState[]>([]);
+
+  // Persist zone sizes to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(ZONE_SIZES_STORAGE_KEY, JSON.stringify({ left: colLeftPx, right: colRightPx, bottom: rowBottomPx }));
+    } catch { /* ignore */ }
+  }, [colLeftPx, colRightPx, rowBottomPx]);
+
+  // Pop-out: move a view into a floating panel
+  const popOutView = useCallback((viewType: AppView | string) => {
+    const id = `fp-${viewType}-${Date.now()}`;
+    setFloatingPanels(prev => [
+      ...prev,
+      {
+        id,
+        viewType,
+        position: {
+          x: Math.max(60, (window.innerWidth - 700) / 2),
+          y: Math.max(40, (window.innerHeight - 500) / 2),
+        },
+        size: { width: 700, height: 500 },
+      },
+    ]);
+  }, []);
+
+  // Dock: return a floating panel back
+  const dockPanel = useCallback((id: string) => {
+    setFloatingPanels(prev => prev.filter(fp => fp.id !== id));
+  }, []);
+
+  // Check if a view is currently popped out as a floating panel
+  const isViewFloating = useCallback((viewType: string) => {
+    return floatingPanels.some(fp => fp.viewType === viewType);
+  }, [floatingPanels]);
 
   function upsertSession(snapshot: ThreadBootstrap) {
     setSessions((prev) => {
@@ -1433,6 +1489,123 @@ function AppContent() {
       return next;
     });
   }
+
+  // ── Terminal SSE streaming ─────────────────────────────────
+  const terminalStreamsRef = useRef<Map<string, AbortController>>(new Map());
+
+  function appendTerminalOutput(rootPath: string, terminalId: string, chunk: string) {
+    setSessions((prev) => {
+      const session = prev.get(rootPath);
+
+      if (!session) {
+        return prev;
+      }
+
+      const terminal = session.workspaceSnapshot.terminals.find((t) => t.id === terminalId);
+
+      if (!terminal) {
+        return prev;
+      }
+
+      const nextSnapshot = structuredClone(session);
+      const nextTerminal = nextSnapshot.workspaceSnapshot.terminals.find((t) => t.id === terminalId)!;
+      nextTerminal.buffer = [...nextTerminal.buffer, chunk];
+
+      const next = new Map(prev);
+      next.set(rootPath, nextSnapshot);
+      return next;
+    });
+  }
+
+  function startTerminalStream(rootPath: string, terminalId: string) {
+    // Close any existing stream for this terminal
+    const existingController = terminalStreamsRef.current.get(terminalId);
+
+    if (existingController) {
+      existingController.abort();
+      terminalStreamsRef.current.delete(terminalId);
+    }
+
+    const abortController = new AbortController();
+    terminalStreamsRef.current.set(terminalId, abortController);
+
+    const apiRoot = resolvedApiRoot ?? API_ROOT_CANDIDATES[0] ?? DEFAULT_DAEMON_ORIGIN;
+    const streamUrl = `${apiRoot}/terminal/sessions/${encodeURIComponent(terminalId)}/stream`;
+
+    void (async () => {
+      try {
+        const response = await fetch(streamUrl, { signal: abortController.signal });
+
+        if (!response.ok || !response.body) {
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let partial = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          partial += decoder.decode(value, { stream: true });
+          const lines = partial.split("\n");
+          partial = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) {
+              continue;
+            }
+
+            try {
+              const payload = JSON.parse(line.slice(6)) as { type: string; data?: string };
+
+              if (payload.type === "output" && payload.data) {
+                const decoded = atob(payload.data);
+                startTransition(() => {
+                  appendTerminalOutput(rootPath, terminalId, decoded);
+                });
+              }
+            } catch {
+              // Ignore malformed SSE data lines.
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        // Stream ended or connection failed — terminal output will stop.
+      } finally {
+        terminalStreamsRef.current.delete(terminalId);
+      }
+    })();
+  }
+
+  function stopTerminalStream(terminalId: string) {
+    const controller = terminalStreamsRef.current.get(terminalId);
+
+    if (controller) {
+      controller.abort();
+      terminalStreamsRef.current.delete(terminalId);
+    }
+  }
+
+  // Clean up all terminal streams on unmount
+  useEffect(() => {
+    const streams = terminalStreamsRef.current;
+
+    return () => {
+      for (const controller of streams.values()) {
+        controller.abort();
+      }
+
+      streams.clear();
+    };
+  }, []);
 
   async function loadWorkspaceCandidates() {
     const candidates = await requestJson<WorkspaceCandidate[]>("/workspaces");
@@ -1486,6 +1659,7 @@ function AppContent() {
           conversationLoop: prefs.conversationLoop ?? current.conversationLoop,
           appearance: prefs.appearance ?? current.appearance,
           terminal: prefs.terminal ?? current.terminal,
+          monitorWorkflow: prefs.monitorWorkflow ?? current.monitorWorkflow,
         }));
       }
     }
@@ -1834,11 +2008,21 @@ function AppContent() {
         body: JSON.stringify(input),
       });
 
+      const rootPath = activeProjectPath ?? activeWorkspaceRoot;
+
+      // Clear the buffer before starting the stream — the SSE endpoint replays
+      // the full buffer on connect, so keeping the REST-returned buffer would
+      // cause duplicate output in the xterm instance.
+      const streamSnapshot: TerminalSessionSnapshot = { ...snapshot, buffer: [] };
+
       startTransition(() => {
-        syncTerminalSnapshot(activeProjectPath ?? activeWorkspaceRoot, snapshot);
+        syncTerminalSnapshot(rootPath, streamSnapshot);
         setConnectionState("live");
         setNotice("");
       });
+
+      // Open real-time SSE stream for terminal output
+      startTerminalStream(rootPath, snapshot.id);
     } catch (error) {
       startTransition(() => {
         if (isDaemonUnavailableError(error)) {
@@ -1997,6 +2181,7 @@ function AppContent() {
             conversationLoop: nextSettings.conversationLoop,
             appearance: nextSettings.appearance,
             terminal: nextSettings.terminal,
+            monitorWorkflow: nextSettings.monitorWorkflow,
           },
         });
       } catch {
@@ -2759,70 +2944,147 @@ function AppContent() {
         
         <main className="shell-main-content">
           {view === "settings" ? (
-            <SettingsView
-              onSave={saveSettings}
-              onThemePreview={(themeId) => {
-                if (themeId && themeId !== "default") {
-                  document.documentElement.dataset.theme = themeId;
-                } else {
-                  delete document.documentElement.dataset.theme;
-                }
-              }}
-              settings={settings}
-            />
+            isViewFloating("settings") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "settings"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("settings")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <SettingsView
+                  onSave={saveSettings}
+                  onThemePreview={(themeId) => {
+                    if (themeId && themeId !== "default") {
+                      document.documentElement.dataset.theme = themeId;
+                    } else {
+                      delete document.documentElement.dataset.theme;
+                    }
+                  }}
+                  settings={settings}
+                />
+              </div>
+            )
           ) : view === "pipelines" ? (
-            <PipelineEditor
-              agents={currentBootstrap.agents}
-              workspaceId={activeConvexWorkspaceId ?? undefined}
-              currentUserId={userId ? String(userId) : undefined}
-            />
+            isViewFloating("pipelines") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "pipelines"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("pipelines")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <PipelineEditor
+                  agents={currentBootstrap.agents}
+                  workspaceId={activeConvexWorkspaceId ?? undefined}
+                  currentUserId={userId ? String(userId) : undefined}
+                />
+              </div>
+            )
           ) : view === "souls" ? (
-            <SoulEditor
-              workspaceId={activeConvexWorkspaceId ?? undefined}
-            />
+            isViewFloating("souls") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "souls"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("souls")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <SoulEditor
+                  workspaceId={activeConvexWorkspaceId ?? undefined}
+                />
+              </div>
+            )
           ) : view === "terminals" ? (
-            <TerminalWorkspace
-              workspacePath={activeWorkspaceRoot}
-              connectionState={connectionState}
-              cwd={activeDocument ? dirname(activeDocument.path) : activeWorkspaceRoot}
-              fontSize={settings.terminal.fontSize}
-              shell={settings.terminal.shell}
-              terminals={currentBootstrap.workspaceSnapshot.terminals}
-              onOpenSession={openInteractiveTerminal}
-              onResizeSession={resizeInteractiveTerminal}
-              onSendInput={sendTerminalInput}
-              activeView={view}
-              onNavigateView={(nextView) => {
-                if (nextView === "profile") {
-                  setProfileUserId(userId);
-                }
-                setView(nextView);
-              }}
-              onBackToIde={() => setView("workspace")}
-            />
+            isViewFloating("terminals") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "terminals"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("terminals")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <TerminalWorkspace
+                  workspacePath={activeWorkspaceRoot}
+                  connectionState={connectionState}
+                  cwd={activeDocument ? dirname(activeDocument.path) : activeWorkspaceRoot}
+                  fontSize={settings.terminal.fontSize}
+                  shell={settings.terminal.shell}
+                  terminals={currentBootstrap.workspaceSnapshot.terminals}
+                  onOpenSession={openInteractiveTerminal}
+                  onResizeSession={resizeInteractiveTerminal}
+                  onSendInput={sendTerminalInput}
+                  activeView={view}
+                  onNavigateView={(nextView) => {
+                    if (nextView === "profile") {
+                      setProfileUserId(userId);
+                    }
+                    setView(nextView);
+                  }}
+                  onBackToIde={() => setView("workspace")}
+                />
+              </div>
+            )
           ) : view === "discovery" ? (
-            <DiscoveryView
-              currentUserId={userId ?? undefined}
-              currentWorkspaceId={activeConvexWorkspaceId ?? undefined}
-              onNavigateToProfile={(uid) => {
-                setProfileUserId(uid);
-                setView("profile");
-              }}
-            />
+            isViewFloating("discovery") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "discovery"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("discovery")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <DiscoveryView
+                  currentUserId={userId ?? undefined}
+                  currentWorkspaceId={activeConvexWorkspaceId ?? undefined}
+                  onNavigateToProfile={(uid) => {
+                    setProfileUserId(uid);
+                    setView("profile");
+                  }}
+                />
+              </div>
+            )
           ) : view === "profile" ? (
-            <ProfileView
-              userId={profileUserId ?? userId ?? undefined}
-              isOwnProfile={!profileUserId || profileUserId === userId}
-            />
+            isViewFloating("profile") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "profile"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("profile")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <ProfileView
+                  userId={profileUserId ?? userId ?? undefined}
+                  isOwnProfile={!profileUserId || profileUserId === userId}
+                />
+              </div>
+            )
           ) : view === "kanban" ? (
-            <KanbanView
-              agents={currentBootstrap.agents}
-              board={currentBootstrap.board}
-              onCreateCard={createBoardCard}
-              onCreateLane={createBoardLane}
-              onMoveCard={moveBoardCard}
-              onRenameLane={renameBoardLane}
-            />
+            isViewFloating("kanban") ? (
+              <div className="view-floating-placeholder" onClick={() => { const fp = floatingPanels.find(p => p.viewType === "kanban"); if (fp) dockPanel(fp.id); }}>
+                This panel is floating — click to dock
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div className="view-popout-bar">
+                  <button type="button" className="view-popout-btn" onClick={() => popOutView("kanban")} title="Pop out to floating panel">{"\u29C9"} Pop out</button>
+                </div>
+                <KanbanView
+                  agents={currentBootstrap.agents}
+                  board={currentBootstrap.board}
+                  onCreateCard={createBoardCard}
+                  onCreateLane={createBoardLane}
+                  onMoveCard={moveBoardCard}
+                  onRenameLane={renameBoardLane}
+                />
+              </div>
+            )
           ) : (
             <>
               {renderZone("left")}
@@ -2930,8 +3192,97 @@ function AppContent() {
         />
       )}
 
+      {/* Floating panels — popped-out views */}
+      {floatingPanels.map(fp => (
+        <FloatingPanel
+          key={fp.id}
+          id={fp.id}
+          title={fp.viewType.charAt(0).toUpperCase() + fp.viewType.slice(1)}
+          initialPosition={fp.position}
+          initialSize={fp.size}
+          onClose={() => dockPanel(fp.id)}
+          onDock={() => dockPanel(fp.id)}
+        >
+          {fp.viewType === "settings" ? (
+            <SettingsView
+              onSave={saveSettings}
+              onThemePreview={(themeId) => {
+                if (themeId && themeId !== "default") {
+                  document.documentElement.dataset.theme = themeId;
+                } else {
+                  delete document.documentElement.dataset.theme;
+                }
+              }}
+              settings={settings}
+            />
+          ) : fp.viewType === "pipelines" ? (
+            <PipelineEditor
+              agents={currentBootstrap.agents}
+              workspaceId={activeConvexWorkspaceId ?? undefined}
+              currentUserId={userId ? String(userId) : undefined}
+            />
+          ) : fp.viewType === "souls" ? (
+            <SoulEditor
+              workspaceId={activeConvexWorkspaceId ?? undefined}
+            />
+          ) : fp.viewType === "discovery" ? (
+            <DiscoveryView
+              currentUserId={userId ?? undefined}
+              currentWorkspaceId={activeConvexWorkspaceId ?? undefined}
+              onNavigateToProfile={(uid) => {
+                setProfileUserId(uid);
+                setView("profile");
+              }}
+            />
+          ) : fp.viewType === "profile" ? (
+            <ProfileView
+              userId={profileUserId ?? userId ?? undefined}
+              isOwnProfile={!profileUserId || profileUserId === userId}
+            />
+          ) : fp.viewType === "kanban" ? (
+            <KanbanView
+              agents={currentBootstrap.agents}
+              board={currentBootstrap.board}
+              onCreateCard={createBoardCard}
+              onCreateLane={createBoardLane}
+              onMoveCard={moveBoardCard}
+              onRenameLane={renameBoardLane}
+            />
+          ) : fp.viewType === "terminals" ? (
+            <TerminalWorkspace
+              workspacePath={activeWorkspaceRoot}
+              connectionState={connectionState}
+              cwd={activeDocument ? dirname(activeDocument.path) : activeWorkspaceRoot}
+              fontSize={settings.terminal.fontSize}
+              shell={settings.terminal.shell}
+              terminals={currentBootstrap.workspaceSnapshot.terminals}
+              onOpenSession={openInteractiveTerminal}
+              onResizeSession={resizeInteractiveTerminal}
+              onSendInput={sendTerminalInput}
+              activeView={view}
+              onNavigateView={(nextView) => {
+                if (nextView === "profile") {
+                  setProfileUserId(userId);
+                }
+                setView(nextView);
+              }}
+              onBackToIde={() => setView("workspace")}
+            />
+          ) : (
+            <div style={{ padding: 16, color: "var(--color-text-dim)" }}>Unknown view: {fp.viewType}</div>
+          )}
+        </FloatingPanel>
+      ))}
+
       {/* Floating chat — always available */}
-      <FloatingChat workspaceId={activeConvexWorkspaceId ?? undefined} />
+      <FloatingChat
+        workspaceId={activeConvexWorkspaceId ?? undefined}
+        workflowContext={
+          settings.monitorWorkflow?.enabled
+            ? { currentView: view, activeProjectPath: activeProjectPath ?? undefined }
+            : undefined
+        }
+      />
 
       {/* Approval/conflict notification badge */}
       {((pendingApprovals && pendingApprovals.length > 0) || (activeConflicts && activeConflicts.length > 0)) && (

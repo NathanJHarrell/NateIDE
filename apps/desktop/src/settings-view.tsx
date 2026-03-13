@@ -63,6 +63,9 @@ export type IdeSettings = {
     fontSize: number;
     shell: string;
   };
+  monitorWorkflow: {
+    enabled: boolean;
+  };
 };
 
 type SettingsViewProps = {
@@ -507,6 +510,29 @@ export function SettingsView(props: SettingsViewProps) {
           >
             Clear Project Memory
           </button>
+        </section>
+
+        <section className="settings-group">
+          <h3>Workflow Monitoring</h3>
+          <p className="settings-hint">
+            When enabled, your current page and project context are shared with AI agents so they can offer more relevant suggestions.
+          </p>
+          <label className="settings-checkbox">
+            <input
+              checked={draft.monitorWorkflow?.enabled ?? false}
+              type="checkbox"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  monitorWorkflow: {
+                    ...current.monitorWorkflow,
+                    enabled: event.target.checked,
+                  },
+                }))
+              }
+            />
+            <span>Monitor my workflow</span>
+          </label>
         </section>
 
         <section className="settings-group">

@@ -397,6 +397,67 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    const terminalStreamMatch = url.pathname.match(/^\/terminal\/sessions\/([^/]+)\/stream$/);
+
+    if (request.method === "GET" && terminalStreamMatch) {
+      const sessionId = decodeURIComponent(terminalStreamMatch[1]);
+      const status = store.getTerminalSessionStatus(sessionId);
+
+      if (!status) {
+        writeJson(response, json({ ok: false, message: "Terminal session not found." }, 404));
+        return;
+      }
+
+      response.writeHead(200, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
+        "access-control-allow-headers": "content-type",
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+      });
+
+      // Send the current buffer so the client sees any output that occurred before subscribing
+      const initialBuffer = store.getTerminalBuffer(sessionId);
+
+      for (const chunk of initialBuffer) {
+        const encoded = Buffer.from(chunk).toString("base64");
+        response.write(`data: ${JSON.stringify({ type: "output", data: encoded })}\n\n`);
+      }
+
+      // If the session is already closed, signal exit and end the stream
+      if (status === "closed") {
+        response.write(`data: ${JSON.stringify({ type: "exit" })}\n\n`);
+        response.end();
+        return;
+      }
+
+      // Subscribe to live terminal output
+      const unsubscribe = store.subscribeTerminalOutput(sessionId, (data) => {
+        try {
+          const encoded = Buffer.from(data).toString("base64");
+          response.write(`data: ${JSON.stringify({ type: "output", data: encoded })}\n\n`);
+        } catch {
+          // Connection may have closed; cleanup happens in the close handler.
+        }
+      });
+
+      const ping = setInterval(() => {
+        try {
+          response.write(": ping\n\n");
+        } catch {
+          // Ignore write errors on closed connections.
+        }
+      }, 15_000);
+
+      request.on("close", () => {
+        clearInterval(ping);
+        unsubscribe();
+      });
+
+      return;
+    }
+
     const terminalInputMatch = url.pathname.match(/^\/terminal\/sessions\/([^/]+)\/input$/);
 
     if (request.method === "POST" && terminalInputMatch) {

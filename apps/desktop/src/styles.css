@@ -524,6 +524,69 @@ button {
 
 .resize-handle-bottom { top: -2px; }
 
+/* Shell resize handles (alternative API) */
+.shell-resize-handle {
+  flex-shrink: 0;
+  background: transparent;
+  transition: background 0.15s;
+  z-index: 10;
+}
+.shell-resize-handle:hover,
+.shell-resize-handle.active {
+  background: var(--color-accent);
+  opacity: 0.5;
+}
+.shell-resize-handle-vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+.shell-resize-handle-horizontal {
+  height: 4px;
+  cursor: row-resize;
+}
+
+/* Pop-out button on view headers */
+.view-popout-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.view-popout-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.view-popout-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-panel-border);
+}
+
+/* Floating panel placeholder (shown when view is popped out) */
+.view-floating-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 120px;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.view-floating-placeholder:hover {
+  color: var(--color-text);
+}
+
 /* ---- Panels ---- */
 
 .panel-container {
@@ -1775,8 +1838,8 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 10px;
   padding: 16px;
-  min-width: 300px;
-  max-width: 300px;
+  min-width: 200px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1931,7 +1994,7 @@ button {
 }
 
 .settings-surface {
-  max-width: 720px;
+  max-width: 100%;
   width: 100%;
   background: var(--color-surface);
   border: 1px solid rgba(255, 255, 255, 0.04);
@@ -2974,6 +3037,7 @@ select.text-input {
 /* ── Left sidebar ──────────────────────────────────────── */
 
 .pe-sidebar {
+  min-width: 180px;
   width: 230px;
   flex-shrink: 0;
   background: var(--color-surface);

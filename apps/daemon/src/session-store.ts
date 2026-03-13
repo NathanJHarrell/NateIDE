@@ -155,6 +155,7 @@ function defaultLaneColor(index: number): string {
 export class LocalSessionStore {
   private readonly interactiveTerminals = new Map<string, InteractiveTerminalRecord>();
   private readonly listeners = new Set<SessionListener>();
+  private readonly terminalOutputListeners = new Map<string, Set<(data: string) => void>>();
   private readonly runAbortControllers = new Map<string, AbortController>();
   private readonly runningCommands = new Map<string, ChildProcess>();
   private readonly scheduledActions = new Set<ReturnType<typeof setTimeout>>();
@@ -419,6 +420,20 @@ export class LocalSessionStore {
       activeTerminal.status = "running";
       this.pushTerminalBuffer(activeTerminal, data);
       this.pushTerminalOutput(activeTerminal, data);
+
+      // Notify real-time streaming subscribers
+      const listeners = this.terminalOutputListeners.get(terminalSessionId);
+
+      if (listeners) {
+        for (const listener of listeners) {
+          try {
+            listener(data);
+          } catch {
+            // Ignore listener errors to avoid breaking the PTY data loop.
+          }
+        }
+      }
+
       this.publish();
     });
     pty.onExit(({ exitCode }) => {
@@ -427,6 +442,7 @@ export class LocalSessionStore {
       }
 
       this.interactiveTerminals.delete(terminalSessionId);
+      this.terminalOutputListeners.delete(terminalSessionId);
       const activeTerminal = this.findTerminalSession(terminalSessionId);
 
       if (!activeTerminal) {
@@ -484,6 +500,46 @@ export class LocalSessionStore {
     record.pty.resize(terminal.cols, terminal.rows);
     this.publish();
     return structuredClone(terminal);
+  }
+
+  /**
+   * Subscribe to real-time terminal output for a given session.
+   * Returns an unsubscribe function. The callback receives raw PTY data strings.
+   */
+  subscribeTerminalOutput(sessionId: string, callback: (data: string) => void): () => void {
+    let listeners = this.terminalOutputListeners.get(sessionId);
+
+    if (!listeners) {
+      listeners = new Set();
+      this.terminalOutputListeners.set(sessionId, listeners);
+    }
+
+    listeners.add(callback);
+
+    return () => {
+      listeners!.delete(callback);
+
+      if (listeners!.size === 0) {
+        this.terminalOutputListeners.delete(sessionId);
+      }
+    };
+  }
+
+  /**
+   * Get the current buffer contents for a terminal session (for replay on stream connect).
+   */
+  getTerminalBuffer(sessionId: string): string[] {
+    const terminal = this.findTerminalSession(sessionId);
+    return terminal ? [...terminal.buffer] : [];
+  }
+
+  /**
+   * Check whether a terminal session exists and return its status.
+   */
+  getTerminalSessionStatus(sessionId: string): "running" | "closed" | null {
+    const terminal = this.findTerminalSession(sessionId);
+    if (!terminal) return null;
+    return terminal.status as "running" | "closed";
   }
 
   createBoardLane(input: { name: string; color?: string }, createdBy: ActorRef = DEFAULT_USER) {
@@ -873,8 +929,8 @@ export class LocalSessionStore {
     this.runAbortControllers.set(run.id, abortController);
 
     // Build conversation history from thread events for context
-    const threadMessages = this.buildThreadMessages();
-    const systemPrompt = this.buildAgentSystemPrompt(assignment.agent);
+    const { messages: threadMessages, workflowContext } = this.buildThreadMessages();
+    const systemPrompt = this.buildAgentSystemPrompt(assignment.agent, undefined, workflowContext);
 
     // Build fallback chain from role config
     const roleId = AGENT_ID_TO_ROLE_ID[assignment.agent.id];
@@ -1005,12 +1061,17 @@ export class LocalSessionStore {
     const abortController = new AbortController();
     this.runAbortControllers.set(quickRunId, abortController);
 
-    const threadMessages = this.buildThreadMessages();
+    const { messages: threadMessages, workflowContext } = this.buildThreadMessages();
     const systemPrompt = [
       `You are a helpful assistant in a multi-agent orchestration IDE called "nateide".`,
       `The user is chatting casually — this is not a task. Be friendly, concise, and conversational.`,
       `Workspace: "${state.workspace.name}" at ${state.workspace.rootPath}.`,
-    ].join("\n");
+      ...(workflowContext ? [
+        `The user is currently on the "${workflowContext.currentView}" page.`,
+        workflowContext.activeProjectPath ? `Active project: ${workflowContext.activeProjectPath}` : "",
+        workflowContext.pageHint ?? "",
+      ] : []),
+    ].filter(Boolean).join("\n");
 
     chatCompletionWithFallback(agentId, systemPrompt, threadMessages, this.apiKeys, (chunk) => {
       if (generation !== this.generation || !this.state) {
@@ -1088,16 +1149,17 @@ export class LocalSessionStore {
       });
   }
 
-  private buildThreadMessages(): AiMessage[] {
+  private buildThreadMessages(): { messages: AiMessage[]; workflowContext?: { currentView: string; activeProjectPath?: string; pageHint?: string } } {
     const state = this.getRequiredState();
     const messages: AiMessage[] = [];
+    let workflowContext: { currentView: string; activeProjectPath?: string; pageHint?: string } | undefined;
 
     for (const event of state.events) {
       if (event.type !== "thread.message.created") {
         continue;
       }
 
-      const payload = event.payload as { content?: string };
+      const payload = event.payload as { content?: string; workflowContext?: { currentView: string; activeProjectPath?: string; pageHint?: string } };
 
       if (!payload.content) {
         continue;
@@ -1105,12 +1167,21 @@ export class LocalSessionStore {
 
       const role = event.actor.type === "user" ? "user" : "assistant";
       messages.push({ role, content: payload.content });
+
+      // Capture workflow context from the latest user message
+      if (event.actor.type === "user" && payload.workflowContext) {
+        workflowContext = payload.workflowContext;
+      }
     }
 
-    return messages;
+    return { messages, workflowContext };
   }
 
-  private buildAgentSystemPrompt(agent: AgentDescriptor, sharedMemory?: string): string {
+  private buildAgentSystemPrompt(
+    agent: AgentDescriptor,
+    sharedMemory?: string,
+    workflowContext?: { currentView: string; activeProjectPath?: string; pageHint?: string },
+  ): string {
     const state = this.getRequiredState();
     const workspaceName = state.workspace.name;
     const rootPath = state.workspace.rootPath;
@@ -1153,6 +1224,18 @@ export class LocalSessionStore {
       "Be concise and action-oriented. Respond directly to the user's request.",
       "When asked to implement something, actually DO it using action blocks — don't just describe what you would do.",
     );
+
+    if (workflowContext) {
+      sections.push(
+        "",
+        "--- USER WORKFLOW CONTEXT ---",
+        `The user is currently on the "${workflowContext.currentView}" page.`,
+        workflowContext.activeProjectPath ? `Active project: ${workflowContext.activeProjectPath}` : "",
+        workflowContext.pageHint ?? "",
+        "Use this context to provide relevant, proactive suggestions based on what the user is working on.",
+        "--- END WORKFLOW CONTEXT ---",
+      );
+    }
 
     return sections.filter(Boolean).join("\n");
   }
@@ -1207,6 +1290,7 @@ export class LocalSessionStore {
     // Fetch shared memory for prompt injection
     const workspaceId = state.workspace.id;
     this.memoryStore.summarizeForPrompt(workspaceId).then((sharedMemory) => {
+      const { workflowContext: loopWorkflowContext } = this.buildThreadMessages();
       // Helper to build a dispatch context for any agent
       const buildContextForAgent = (agent: AgentDescriptor): AgentDispatchContext => {
         const roleId = AGENT_ID_TO_ROLE_ID[agent.id];
@@ -1247,7 +1331,7 @@ export class LocalSessionStore {
 
         return {
           agent,
-          systemPrompt: this.buildAgentSystemPrompt(agent, sharedMemory),
+          systemPrompt: this.buildAgentSystemPrompt(agent, sharedMemory, loopWorkflowContext),
           runId: run.id,
           taskId: task.id,
           roles: this.agentRoles,
@@ -1295,7 +1379,7 @@ export class LocalSessionStore {
 
         return {
           agent: assignment.agent,
-          systemPrompt: this.buildAgentSystemPrompt(assignment.agent, sharedMemory),
+          systemPrompt: this.buildAgentSystemPrompt(assignment.agent, sharedMemory, loopWorkflowContext),
           runId: run.id,
           taskId: task.id,
           roles: this.agentRoles,
@@ -1310,7 +1394,7 @@ export class LocalSessionStore {
         availableAgents.set(ctx.agent.id, ctx);
       }
 
-      const userMessages: AiMessage[] = this.buildThreadMessages();
+      const { messages: userMessages } = this.buildThreadMessages();
 
       runConversationLoop(
         contexts,
