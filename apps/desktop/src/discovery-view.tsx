@@ -18,6 +18,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 // ---------------------------------------------------------------------------
 
 type ArtifactType = "project" | "harness" | "pipeline" | "soul";
+type SortMode = "trending" | "newest" | "most-starred";
 
 interface ArtifactCard {
   _id: string;
@@ -27,6 +28,7 @@ interface ArtifactCard {
   ownerId: Id<"users">;
   ownerName?: string;
   ownerHandle?: string;
+  ownerAvatarUrl?: string;
   tags?: string[];
   targetType: string;
   targetId: string;
@@ -102,10 +104,23 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--color-text)",
     outline: "none",
   },
-  tagBar: {
+  tagFilterBar: {
     display: "flex",
     flexWrap: "wrap" as const,
     gap: 6,
+    padding: "10px 14px",
+    background: "var(--color-surface)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--panel-radius)",
+  },
+  tagBarLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--color-text-dim)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.05em",
+    alignSelf: "center",
+    marginRight: 4,
   },
   tagPill: {
     padding: "4px 12px",
@@ -113,7 +128,7 @@ const styles: Record<string, CSSProperties> = {
     fontFamily: "var(--font-ui)",
     borderRadius: 999,
     border: "1px solid var(--color-border)",
-    background: "var(--color-surface)",
+    background: "transparent",
     color: "var(--color-text-dim)",
     cursor: "pointer",
     transition: "all 0.15s",
@@ -123,9 +138,44 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--color-text-bright)",
     borderColor: "var(--color-accent)",
   },
+  sortBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  sortLabel: {
+    fontSize: 12,
+    color: "var(--color-text-dim)",
+    marginRight: 4,
+    whiteSpace: "nowrap" as const,
+  },
+  sortBtn: {
+    padding: "4px 10px",
+    fontSize: 11,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 500,
+    borderRadius: 4,
+    border: "1px solid var(--color-border)",
+    background: "transparent",
+    color: "var(--color-text-dim)",
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  sortBtnActive: {
+    background: "var(--color-accent)",
+    color: "var(--color-background)",
+    borderColor: "var(--color-accent)",
+    fontWeight: 600,
+  },
   section: {
     display: "flex",
     flexDirection: "column",
+    gap: 12,
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
   },
   sectionTitle: {
@@ -142,13 +192,13 @@ const styles: Record<string, CSSProperties> = {
   card: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
-    padding: 16,
+    gap: 10,
+    padding: "18px 18px 14px",
     background: "var(--color-surface)",
     border: "1px solid var(--color-border)",
     borderRadius: "var(--panel-radius)",
     cursor: "default",
-    transition: "border-color 0.15s",
+    transition: "border-color 0.15s, box-shadow 0.15s",
   },
   cardHeader: {
     display: "flex",
@@ -167,9 +217,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     color: "var(--color-text-dim)",
     margin: 0,
-    lineHeight: 1.4,
+    lineHeight: 1.5,
     display: "-webkit-box",
-    WebkitLineClamp: 2,
+    WebkitLineClamp: 3,
     WebkitBoxOrient: "vertical" as any,
     overflow: "hidden",
   },
@@ -188,8 +238,34 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: "auto",
-    paddingTop: 6,
+    paddingTop: 8,
     borderTop: "1px solid var(--color-border)",
+  },
+  ownerInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  ownerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: "50%",
+    background: "var(--color-panel)",
+    border: "1px solid var(--color-border)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 9,
+    fontWeight: 600,
+    color: "var(--color-text-dim)",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  ownerAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: "50%",
+    objectFit: "cover" as const,
   },
   ownerLink: {
     fontSize: 12,
@@ -220,10 +296,11 @@ const styles: Record<string, CSSProperties> = {
   },
   cardTagPill: {
     fontSize: 10,
-    padding: "2px 6px",
+    padding: "2px 8px",
     borderRadius: 999,
     background: "var(--color-panel)",
     color: "var(--color-text-dim)",
+    border: "1px solid var(--color-border)",
   },
   emptyState: {
     display: "flex",
@@ -361,6 +438,20 @@ const TYPE_COLORS: Record<ArtifactType, { bg: string; fg: string }> = {
 };
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getInitials(name: string | undefined): string {
+  if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -414,14 +505,6 @@ function StarButton({
 // Soul-specific: Fork + Report
 // ---------------------------------------------------------------------------
 
-/**
- * ForkButton
- * Copies a public soul into the current user's workspace as a private document.
- * Memory is intentionally excluded from forks (clean slate).
- *
- * TODO (Task Claude): pass currentWorkspaceId down from app context so this
- * button is active whenever a user is inside a workspace.
- */
 function ForkButton({
   soulId,
   soulName,
@@ -461,7 +544,7 @@ function ForkButton({
   };
 
   if (status === "done") {
-    return <span style={styles.toastSuccess}>\u2713 Forked to your workspace</span>;
+    return <span style={styles.toastSuccess}>{"\u2713"} Forked to your workspace</span>;
   }
   if (status === "error") {
     return <span style={styles.toastError}>Fork failed. Try again.</span>;
@@ -483,7 +566,7 @@ function ForkButton({
           ? "Sign in to fork"
           : !currentWorkspaceId
           ? "Open a workspace to fork into"
-          : `Fork \"${soulName}\" into your workspace`
+          : `Fork "${soulName}" into your workspace`
       }
       disabled={!canFork || status === "forking"}
     >
@@ -492,13 +575,6 @@ function ForkButton({
   );
 }
 
-/**
- * ReportButton
- * Reports a public soul for review. On submission the soul is immediately
- * reverted to workspace visibility server-side — no moderation queue delay.
- *
- * The panel expands inline to collect a reason before submitting.
- */
 function ReportButton({
   soulId,
   currentUserId,
@@ -534,7 +610,7 @@ function ReportButton({
   };
 
   if (status === "done") {
-    return <span style={{ ...styles.toastSuccess, marginLeft: "auto" }}>Reported \u2014 removed from public view</span>;
+    return <span style={{ ...styles.toastSuccess, marginLeft: "auto" }}>Reported -- removed from public view</span>;
   }
   if (status === "error") {
     return <span style={{ ...styles.toastError, marginLeft: "auto" }}>Report failed. Try again.</span>;
@@ -611,9 +687,11 @@ function ArtifactCardComponent({
 
   return (
     <div
+      className="discovery-card"
       style={{
         ...styles.card,
         borderColor: hovered ? "var(--color-accent)" : "var(--color-border)",
+        boxShadow: hovered ? "0 0 12px rgba(94,165,232,0.08)" : "none",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -638,16 +716,29 @@ function ArtifactCardComponent({
       )}
 
       <div style={styles.cardFooter}>
-        <button
-          style={styles.ownerLink}
-          onClick={() =>
-            onNavigateToProfile && onNavigateToProfile(artifact.ownerId)
-          }
-        >
-          {artifact.ownerHandle
-            ? `@${artifact.ownerHandle}`
-            : artifact.ownerName ?? "unknown"}
-        </button>
+        <div style={styles.ownerInfo}>
+          <div style={styles.ownerAvatar}>
+            {artifact.ownerAvatarUrl ? (
+              <img
+                src={artifact.ownerAvatarUrl}
+                alt=""
+                style={styles.ownerAvatarImg}
+              />
+            ) : (
+              getInitials(artifact.ownerName)
+            )}
+          </div>
+          <button
+            style={styles.ownerLink}
+            onClick={() =>
+              onNavigateToProfile && onNavigateToProfile(artifact.ownerId)
+            }
+          >
+            {artifact.ownerHandle
+              ? `@${artifact.ownerHandle}`
+              : artifact.ownerName ?? "unknown"}
+          </button>
+        </div>
         <StarButton
           currentUserId={currentUserId}
           targetType={artifact.targetType}
@@ -655,7 +746,7 @@ function ArtifactCardComponent({
         />
       </div>
 
-      {/* Fork + Report — soul cards only */}
+      {/* Fork + Report -- soul cards only */}
       {isSoul && (
         <div style={styles.soulActions}>
           <ForkButton
@@ -675,6 +766,42 @@ function ArtifactCardComponent({
 }
 
 // ---------------------------------------------------------------------------
+// Sort bar
+// ---------------------------------------------------------------------------
+
+function SortBar({
+  value,
+  onChange,
+}: {
+  value: SortMode;
+  onChange: (mode: SortMode) => void;
+}) {
+  const modes: { key: SortMode; label: string }[] = [
+    { key: "trending", label: "Trending" },
+    { key: "most-starred", label: "Most starred" },
+    { key: "newest", label: "Newest" },
+  ];
+
+  return (
+    <div style={styles.sortBar}>
+      <span style={styles.sortLabel}>Sort:</span>
+      {modes.map((m) => (
+        <button
+          key={m.key}
+          style={{
+            ...styles.sortBtn,
+            ...(value === m.key ? styles.sortBtnActive : {}),
+          }}
+          onClick={() => onChange(m.key)}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -685,6 +812,7 @@ export function DiscoveryView({
 }: DiscoveryViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("trending");
 
   const trending = useTrending(12);
   const recent = useRecentPublic(12);
@@ -699,6 +827,21 @@ export function DiscoveryView({
     if (isFiltering) return tagResults;
     return null;
   }, [isSearching, isFiltering, searchResults, tagResults]);
+
+  // Choose which main section data to show based on sort mode
+  const mainSectionData = useMemo(() => {
+    if (sortMode === "newest") return recent;
+    // "trending" and "most-starred" both use trending data (backend ranks by stars)
+    return trending;
+  }, [sortMode, trending, recent]);
+
+  const mainSectionTitle = useMemo(() => {
+    switch (sortMode) {
+      case "trending": return "Trending";
+      case "most-starred": return "Most Starred";
+      case "newest": return "Recently Published";
+    }
+  }, [sortMode]);
 
   const handleTagClick = (tag: string) => {
     setActiveTag((prev) => (prev === tag ? null : tag));
@@ -727,7 +870,8 @@ export function DiscoveryView({
       </div>
 
       {/* Tag filter bar */}
-      <div style={styles.tagBar}>
+      <div style={styles.tagFilterBar}>
+        <span style={styles.tagBarLabel}>Tags</span>
         {COMMON_TAGS.map((tag) => (
           <button
             key={tag}
@@ -768,28 +912,31 @@ export function DiscoveryView({
         </div>
       )}
 
-      {/* Trending */}
+      {/* Main browsing section with sort controls */}
       {!isSearching && !isFiltering && (
         <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Trending</h3>
-          {trending === undefined ? (
-            <div style={styles.loading}>Loading trending...</div>
-          ) : trending && trending.length > 0 ? (
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>{mainSectionTitle}</h3>
+            <SortBar value={sortMode} onChange={setSortMode} />
+          </div>
+          {mainSectionData === undefined ? (
+            <div style={styles.loading}>Loading...</div>
+          ) : mainSectionData && mainSectionData.length > 0 ? (
             <div style={styles.grid}>
-              {trending.map((a: any) => (
+              {mainSectionData.map((a: any) => (
                 <ArtifactCardComponent key={a._id} artifact={a} {...cardProps} />
               ))}
             </div>
           ) : (
             <div style={styles.emptyState}>
-              Nothing trending yet. Be the first to publish!
+              Nothing here yet. Be the first to publish!
             </div>
           )}
         </div>
       )}
 
-      {/* Recently Published */}
-      {!isSearching && !isFiltering && (
+      {/* Recently Published -- show as secondary section when sorting by trending/most-starred */}
+      {!isSearching && !isFiltering && sortMode !== "newest" && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Recently Published</h3>
           {recent === undefined ? (

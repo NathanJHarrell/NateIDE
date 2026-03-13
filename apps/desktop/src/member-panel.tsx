@@ -26,6 +26,17 @@ interface MemberPanelProps {
 }
 
 // ---------------------------------------------------------------------------
+// Role config
+// ---------------------------------------------------------------------------
+
+const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  owner: { label: "Owner", color: "#facc15", bg: "rgba(250,204,21,0.10)", icon: "\u2655" },
+  admin: { label: "Admin", color: "#f472b6", bg: "rgba(244,114,182,0.10)", icon: "\u2606" },
+  editor: { label: "Editor", color: "#60a5fa", bg: "rgba(96,165,250,0.10)", icon: "\u270E" },
+  viewer: { label: "Viewer", color: "#94a3b8", bg: "rgba(148,163,184,0.08)", icon: "\u25C9" },
+};
+
+// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
@@ -62,6 +73,16 @@ const styles = {
     textAlign: "center",
   } satisfies CSSProperties,
 
+  onlineBadge: {
+    background: "rgba(34,197,94,0.15)",
+    color: "#22c55e",
+    borderRadius: 10,
+    padding: "1px 7px",
+    fontSize: 10,
+    fontWeight: 600,
+    marginLeft: "auto",
+  } satisfies CSSProperties,
+
   scrollArea: {
     flex: 1,
     overflowY: "auto",
@@ -85,13 +106,13 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "6px 0",
+    padding: "8px 0",
     borderBottom: "1px solid var(--color-border)",
   } satisfies CSSProperties,
 
   avatar: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: "50%",
     background: "var(--color-surface)",
     border: "1px solid var(--color-border)",
@@ -103,6 +124,14 @@ const styles = {
     color: "var(--color-text-muted)",
     position: "relative",
     flexShrink: 0,
+    overflow: "hidden",
+  } satisfies CSSProperties,
+
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: "50%",
+    objectFit: "cover",
   } satisfies CSSProperties,
 
   presenceDot: {
@@ -120,16 +149,51 @@ const styles = {
     minWidth: 0,
   } satisfies CSSProperties,
 
+  memberNameRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  } satisfies CSSProperties,
+
   memberName: {
     fontWeight: 500,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
+    cursor: "pointer",
+    borderRadius: 3,
+    padding: "0 2px",
+    transition: "color 0.15s",
+  } satisfies CSSProperties,
+
+  memberMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
   } satisfies CSSProperties,
 
   memberRole: {
     fontSize: 11,
     color: "var(--color-text-muted)",
+  } satisfies CSSProperties,
+
+  roleBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 10,
+    fontWeight: 600,
+    padding: "1px 8px",
+    borderRadius: 999,
+    letterSpacing: "0.02em",
+    lineHeight: "18px",
+  } satisfies CSSProperties,
+
+  timestamp: {
+    fontSize: 10,
+    color: "var(--color-text-dimmer, var(--color-text-muted))",
+    whiteSpace: "nowrap",
   } satisfies CSSProperties,
 
   roleSelect: {
@@ -236,6 +300,21 @@ function getInitials(name: string | undefined): string {
     .slice(0, 2);
 }
 
+function formatRelativeTime(timestamp: number | undefined): string {
+  if (!timestamp) return "";
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -327,6 +406,7 @@ export function MemberPanel({
   const isAdminOrOwner = myRole === "owner" || myRole === "admin";
 
   const memberCount = members?.length ?? 0;
+  const onlineCount = presenceByUser.size;
 
   return (
     <div style={styles.container}>
@@ -335,6 +415,11 @@ export function MemberPanel({
         <span>Members</span>
         {memberCount > 0 && (
           <span style={styles.badge}>{memberCount}</span>
+        )}
+        {onlineCount > 0 && (
+          <span style={styles.onlineBadge}>
+            {onlineCount} online
+          </span>
         )}
       </div>
 
@@ -354,12 +439,21 @@ export function MemberPanel({
           {members?.map((member) => {
             const presenceStatus = presenceByUser.get(member.userId);
             const isSelf = member.userId === currentUserId;
+            const rc = ROLE_CONFIG[member.role] ?? ROLE_CONFIG.viewer;
 
             return (
               <div key={member._id} style={styles.memberRow}>
                 {/* Avatar + presence */}
                 <div style={styles.avatar}>
-                  {getInitials(member.user?.displayName)}
+                  {member.user?.avatarUrl ? (
+                    <img
+                      src={member.user.avatarUrl}
+                      alt=""
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    getInitials(member.user?.displayName)
+                  )}
                   {presenceStatus && (
                     <div
                       style={{
@@ -373,11 +467,17 @@ export function MemberPanel({
 
                 {/* Name + role */}
                 <div style={styles.memberInfo}>
-                  <div style={styles.memberName}>
-                    {member.user?.displayName ?? "Unknown"}
-                    {isSelf && " (you)"}
+                  <div style={styles.memberNameRow}>
+                    <span
+                      className="member-name-link"
+                      style={styles.memberName}
+                      title={`View profile: ${member.user?.displayName ?? "Unknown"}`}
+                    >
+                      {member.user?.displayName ?? "Unknown"}
+                      {isSelf && " (you)"}
+                    </span>
                   </div>
-                  <div style={styles.memberRole}>
+                  <div style={styles.memberMeta}>
                     {isOwner && !isSelf && member.role !== "owner" ? (
                       <select
                         style={styles.roleSelect}
@@ -396,7 +496,20 @@ export function MemberPanel({
                         <option value="viewer">viewer</option>
                       </select>
                     ) : (
-                      member.role
+                      <span
+                        style={{
+                          ...styles.roleBadge,
+                          color: rc.color,
+                          background: rc.bg,
+                        }}
+                      >
+                        {rc.icon} {rc.label}
+                      </span>
+                    )}
+                    {member.joinedAt && (
+                      <span style={styles.timestamp} title={`Joined ${new Date(member.joinedAt).toLocaleDateString()}`}>
+                        joined {formatRelativeTime(member.joinedAt)}
+                      </span>
                     )}
                   </div>
                 </div>

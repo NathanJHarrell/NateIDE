@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import {
   ReactFlow,
@@ -10,11 +10,14 @@ import {
   useEdgesState,
   Handle,
   Position,
+  MarkerType,
   type Connection,
   type Node,
   type Edge,
   type NodeTypes,
   type NodeProps,
+  type OnSelectionChangeParams,
+  BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { AgentDescriptor } from "@nateide/agents";
@@ -35,17 +38,19 @@ interface PipelineEditorProps {
   currentUserId?: string;
 }
 
-/** Shape of a pipeline node as stored in Convex (v.any() array items). */
+type NodeType = "trigger" | "agent" | "code" | "condition" | "output";
+
 interface PipelineNodeData {
   id: string;
-  type: "agent" | "condition" | "start" | "end" | "parallel-split" | "parallel-join";
+  type: NodeType;
   label: string;
   agentId?: string;
   condition?: string;
+  script?: string;
+  description?: string;
   position: { x: number; y: number };
 }
 
-/** Shape of a pipeline edge as stored in Convex (v.any() array items). */
 interface PipelineEdgeData {
   id: string;
   source: string;
@@ -54,7 +59,6 @@ interface PipelineEdgeData {
   sourceHandle?: string;
 }
 
-/** Convex pipeline document shape (from usePipelines query). */
 interface ConvexPipeline {
   _id: Id<"pipelines">;
   _creationTime: number;
@@ -71,78 +75,159 @@ interface ConvexPipeline {
   updatedAt: number;
 }
 
+// ── Node colors & icons by type ─────────────────────────
+
+const NODE_COLORS: Record<NodeType, string> = {
+  trigger: "#2b8a57",
+  agent: "#3f78c7",
+  code: "#c2853d",
+  condition: "#8a50c7",
+  output: "#d14d72",
+};
+
+const NODE_ICONS: Record<NodeType, string> = {
+  trigger: "\u25B6",
+  agent: "\u2699",
+  code: "\u276F_",
+  condition: "\u2B29",
+  output: "\u2B24",
+};
+
+const NODE_LABELS: Record<NodeType, string> = {
+  trigger: "Trigger",
+  agent: "Agent Task",
+  code: "Code",
+  condition: "Condition",
+  output: "Output",
+};
+
 // ── Custom Node Components ──────────────────────────────
 
-function AgentNode({ data }: NodeProps) {
-  const d = data as { label: string; agentId: string; color: string };
+function TriggerNode({ data, selected }: NodeProps) {
+  const d = data as { label: string; description?: string };
   return (
-    <div className="pipeline-node pipeline-node-agent" style={{ "--node-color": d.color } as CSSProperties}>
-      <Handle type="target" position={Position.Left} />
-      <div className="pipeline-node-label">{d.label}</div>
-      <div className="pipeline-node-sub">{d.agentId}</div>
-      <Handle type="source" position={Position.Right} />
+    <div className={`pe-node pe-node-trigger ${selected ? "pe-node-selected" : ""}`}>
+      <div className="pe-node-header" style={{ background: NODE_COLORS.trigger }}>
+        <span className="pe-node-icon">{NODE_ICONS.trigger}</span>
+        <span className="pe-node-title">{d.label}</span>
+      </div>
+      <div className="pe-node-body">
+        <span className="pe-node-type-badge">Trigger</span>
+        {d.description && <p className="pe-node-desc">{d.description}</p>}
+      </div>
+      <Handle type="source" position={Position.Right} className="pe-handle pe-handle-source" />
     </div>
   );
 }
 
-function ConditionNode({ data }: NodeProps) {
-  const d = data as { label: string; condition: string };
+function AgentNode({ data, selected }: NodeProps) {
+  const d = data as { label: string; agentId?: string; agentColor?: string; description?: string };
+  const color = d.agentColor || NODE_COLORS.agent;
   return (
-    <div className="pipeline-node pipeline-node-condition">
-      <Handle type="target" position={Position.Left} />
-      <div className="pipeline-node-label">{d.label}</div>
-      <div className="pipeline-node-sub">{d.condition || "condition"}</div>
-      <Handle type="source" position={Position.Right} id="true" style={{ top: "30%" }} />
-      <Handle type="source" position={Position.Right} id="false" style={{ top: "70%" }} />
+    <div className={`pe-node pe-node-agent ${selected ? "pe-node-selected" : ""}`}>
+      <Handle type="target" position={Position.Left} className="pe-handle pe-handle-target" />
+      <div className="pe-node-header" style={{ background: color }}>
+        <span className="pe-node-icon">{NODE_ICONS.agent}</span>
+        <span className="pe-node-title">{d.label}</span>
+      </div>
+      <div className="pe-node-body">
+        <span className="pe-node-type-badge">Agent Task</span>
+        {d.agentId && <span className="pe-node-agent-id">{d.agentId}</span>}
+        {d.description && <p className="pe-node-desc">{d.description}</p>}
+      </div>
+      <Handle type="source" position={Position.Right} className="pe-handle pe-handle-source" />
     </div>
   );
 }
 
-function StartNode({ data }: NodeProps) {
+function CodeNode({ data, selected }: NodeProps) {
+  const d = data as { label: string; script?: string; description?: string };
   return (
-    <div className="pipeline-node pipeline-node-start">
-      <div className="pipeline-node-label">{(data as { label: string }).label}</div>
-      <Handle type="source" position={Position.Right} />
+    <div className={`pe-node pe-node-code ${selected ? "pe-node-selected" : ""}`}>
+      <Handle type="target" position={Position.Left} className="pe-handle pe-handle-target" />
+      <div className="pe-node-header" style={{ background: NODE_COLORS.code }}>
+        <span className="pe-node-icon">{NODE_ICONS.code}</span>
+        <span className="pe-node-title">{d.label}</span>
+      </div>
+      <div className="pe-node-body">
+        <span className="pe-node-type-badge">Code</span>
+        {d.script && <code className="pe-node-script">{d.script.slice(0, 60)}</code>}
+        {d.description && <p className="pe-node-desc">{d.description}</p>}
+      </div>
+      <Handle type="source" position={Position.Right} className="pe-handle pe-handle-source" />
     </div>
   );
 }
 
-function EndNode({ data }: NodeProps) {
+function ConditionNode({ data, selected }: NodeProps) {
+  const d = data as { label: string; condition?: string; description?: string };
   return (
-    <div className="pipeline-node pipeline-node-end">
-      <Handle type="target" position={Position.Left} />
-      <div className="pipeline-node-label">{(data as { label: string }).label}</div>
+    <div className={`pe-node pe-node-condition ${selected ? "pe-node-selected" : ""}`}>
+      <Handle type="target" position={Position.Left} className="pe-handle pe-handle-target" />
+      <div className="pe-node-header" style={{ background: NODE_COLORS.condition }}>
+        <span className="pe-node-icon">{NODE_ICONS.condition}</span>
+        <span className="pe-node-title">{d.label}</span>
+      </div>
+      <div className="pe-node-body">
+        <span className="pe-node-type-badge">Condition</span>
+        {d.condition && <span className="pe-node-condition-expr">{d.condition}</span>}
+        {d.description && <p className="pe-node-desc">{d.description}</p>}
+      </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="true"
+        className="pe-handle pe-handle-source pe-handle-true"
+        style={{ top: "35%" }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="false"
+        className="pe-handle pe-handle-source pe-handle-false"
+        style={{ top: "65%" }}
+      />
     </div>
   );
 }
 
-function ParallelSplitNode({ data }: NodeProps) {
+function OutputNode({ data, selected }: NodeProps) {
+  const d = data as { label: string; description?: string };
   return (
-    <div className="pipeline-node pipeline-node-parallel">
-      <Handle type="target" position={Position.Left} />
-      <div className="pipeline-node-label">{(data as { label: string }).label}</div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
-function ParallelJoinNode({ data }: NodeProps) {
-  return (
-    <div className="pipeline-node pipeline-node-parallel">
-      <Handle type="target" position={Position.Left} />
-      <div className="pipeline-node-label">{(data as { label: string }).label}</div>
-      <Handle type="source" position={Position.Right} />
+    <div className={`pe-node pe-node-output ${selected ? "pe-node-selected" : ""}`}>
+      <Handle type="target" position={Position.Left} className="pe-handle pe-handle-target" />
+      <div className="pe-node-header" style={{ background: NODE_COLORS.output }}>
+        <span className="pe-node-icon">{NODE_ICONS.output}</span>
+        <span className="pe-node-title">{d.label}</span>
+      </div>
+      <div className="pe-node-body">
+        <span className="pe-node-type-badge">Output</span>
+        {d.description && <p className="pe-node-desc">{d.description}</p>}
+      </div>
     </div>
   );
 }
 
 const nodeTypes: NodeTypes = {
+  trigger: TriggerNode,
   agent: AgentNode,
+  code: CodeNode,
   condition: ConditionNode,
-  start: StartNode,
-  end: EndNode,
-  "parallel-split": ParallelSplitNode,
-  "parallel-join": ParallelJoinNode,
+  output: OutputNode,
+};
+
+// ── Edge defaults ───────────────────────────────────────
+
+const defaultEdgeOptions = {
+  type: "smoothstep",
+  animated: true,
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 16,
+    height: 16,
+    color: "#3f78c7",
+  },
+  style: { stroke: "#3f78c7", strokeWidth: 2 },
 };
 
 // ── Helpers ─────────────────────────────────────────────
@@ -157,8 +242,10 @@ function pipelineToFlowNodes(pipeline: ConvexPipeline, agents: AgentDescriptor[]
       data: {
         label: n.label,
         agentId: n.agentId ?? "",
+        agentColor: agent?.color ?? "",
         condition: n.condition ?? "",
-        color: agent?.color ?? "#637777",
+        script: n.script ?? "",
+        description: n.description ?? "",
       },
     };
   });
@@ -171,17 +258,18 @@ function pipelineToFlowEdges(pipeline: ConvexPipeline): Edge[] {
     target: e.target,
     label: e.label,
     sourceHandle: e.sourceHandle,
-    animated: true,
-    style: { stroke: "#3f78c7" },
+    ...defaultEdgeOptions,
   }));
 }
 
 function flowToPipelineNodes(nodes: Node[]): PipelineNodeData[] {
   return nodes.map((n) => ({
     id: n.id,
-    type: (n.type ?? "agent") as PipelineNodeData["type"],
-    agentId: (n.data as { agentId?: string }).agentId || undefined,
-    condition: (n.data as { condition?: string }).condition || undefined,
+    type: (n.type ?? "agent") as NodeType,
+    agentId: (n.data as Record<string, string>).agentId || undefined,
+    condition: (n.data as Record<string, string>).condition || undefined,
+    script: (n.data as Record<string, string>).script || undefined,
+    description: (n.data as Record<string, string>).description || undefined,
     label: (n.data as { label: string }).label,
     position: n.position,
   }));
@@ -197,17 +285,232 @@ function flowToPipelineEdges(edges: Edge[]): PipelineEdgeData[] {
   }));
 }
 
-/** Default nodes for a brand-new unsaved pipeline. */
 function newDefaultPipelineState() {
   return {
     name: "New Pipeline",
     description: "",
     nodes: [
-      { id: "start-1", type: "start" as const, label: "Start", position: { x: 50, y: 200 } },
-      { id: "end-1", type: "end" as const, label: "End", position: { x: 600, y: 200 } },
+      { id: "trigger-1", type: "trigger" as const, label: "Start", position: { x: 50, y: 200 } },
+      { id: "output-1", type: "output" as const, label: "End", position: { x: 600, y: 200 } },
     ],
     edges: [] as PipelineEdgeData[],
   };
+}
+
+/** Auto-layout: arrange nodes left-to-right as a DAG. */
+function autoLayoutNodes(nodes: Node[], edges: Edge[]): Node[] {
+  if (nodes.length === 0) return nodes;
+
+  // Build adjacency from edges
+  const inDegree = new Map<string, number>();
+  const children = new Map<string, string[]>();
+  for (const n of nodes) {
+    inDegree.set(n.id, 0);
+    children.set(n.id, []);
+  }
+  for (const e of edges) {
+    inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
+    const c = children.get(e.source) ?? [];
+    c.push(e.target);
+    children.set(e.source, c);
+  }
+
+  // Topological sort (Kahn's algorithm)
+  const queue: string[] = [];
+  for (const [id, deg] of inDegree) {
+    if (deg === 0) queue.push(id);
+  }
+
+  const layers: string[][] = [];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const layer = [...queue];
+    layers.push(layer);
+    queue.length = 0;
+    for (const id of layer) {
+      visited.add(id);
+      for (const child of children.get(id) ?? []) {
+        const newDeg = (inDegree.get(child) ?? 1) - 1;
+        inDegree.set(child, newDeg);
+        if (newDeg === 0) queue.push(child);
+      }
+    }
+  }
+
+  // Place orphans (not visited) in last layer
+  for (const n of nodes) {
+    if (!visited.has(n.id)) {
+      if (layers.length === 0) layers.push([]);
+      layers[layers.length - 1].push(n.id);
+    }
+  }
+
+  const LAYER_GAP = 280;
+  const NODE_GAP = 120;
+  const START_X = 60;
+  const START_Y = 60;
+
+  const posMap = new Map<string, { x: number; y: number }>();
+  for (let col = 0; col < layers.length; col++) {
+    const layer = layers[col];
+    const totalHeight = (layer.length - 1) * NODE_GAP;
+    const startY = START_Y + Math.max(0, (300 - totalHeight) / 2);
+    for (let row = 0; row < layer.length; row++) {
+      posMap.set(layer[row], {
+        x: START_X + col * LAYER_GAP,
+        y: startY + row * NODE_GAP,
+      });
+    }
+  }
+
+  return nodes.map((n) => ({
+    ...n,
+    position: posMap.get(n.id) ?? n.position,
+  }));
+}
+
+// ── Property Panel ──────────────────────────────────────
+
+interface PropertyPanelProps {
+  node: Node;
+  agents: AgentDescriptor[];
+  onUpdate: (id: string, data: Record<string, unknown>) => void;
+  onDelete: (id: string) => void;
+}
+
+function PropertyPanel({ node, agents, onUpdate, onDelete }: PropertyPanelProps) {
+  const d = node.data as Record<string, string>;
+  const nodeType = node.type as NodeType;
+
+  return (
+    <div className="pe-property-panel">
+      <div className="pe-prop-header">
+        <div className="pe-prop-type-indicator" style={{ background: NODE_COLORS[nodeType] }} />
+        <h3>{NODE_LABELS[nodeType]}</h3>
+        <button
+          type="button"
+          className="pe-prop-close"
+          onClick={() => onDelete(node.id)}
+          title="Delete node"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div className="pe-prop-fields">
+        <label className="pe-prop-label">
+          Name
+          <input
+            className="pe-prop-input"
+            value={d.label ?? ""}
+            onChange={(e) => onUpdate(node.id, { ...d, label: e.target.value })}
+          />
+        </label>
+
+        <label className="pe-prop-label">
+          Description
+          <textarea
+            className="pe-prop-textarea"
+            rows={2}
+            value={d.description ?? ""}
+            onChange={(e) => onUpdate(node.id, { ...d, description: e.target.value })}
+          />
+        </label>
+
+        {nodeType === "agent" && (
+          <label className="pe-prop-label">
+            Agent
+            <select
+              className="pe-prop-select"
+              value={d.agentId ?? ""}
+              onChange={(e) => {
+                const ag = agents.find((a) => a.id === e.target.value);
+                onUpdate(node.id, {
+                  ...d,
+                  agentId: e.target.value,
+                  agentColor: ag?.color ?? "",
+                  label: d.label || ag?.name || "Agent Task",
+                });
+              }}
+            >
+              <option value="">Select agent...</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {nodeType === "condition" && (
+          <label className="pe-prop-label">
+            Condition Expression
+            <input
+              className="pe-prop-input"
+              value={d.condition ?? ""}
+              placeholder="e.g. status === 'success'"
+              onChange={(e) => onUpdate(node.id, { ...d, condition: e.target.value })}
+            />
+          </label>
+        )}
+
+        {nodeType === "code" && (
+          <label className="pe-prop-label">
+            Script / Command
+            <textarea
+              className="pe-prop-textarea pe-prop-code"
+              rows={4}
+              value={d.script ?? ""}
+              placeholder="#!/bin/bash&#10;echo hello"
+              onChange={(e) => onUpdate(node.id, { ...d, script: e.target.value })}
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="pe-prop-footer">
+        <button type="button" className="pe-btn pe-btn-danger" onClick={() => onDelete(node.id)}>
+          Delete Node
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Node Menu ───────────────────────────────────────
+
+interface AddNodeMenuProps {
+  onAdd: (type: NodeType) => void;
+  onClose: () => void;
+}
+
+function AddNodeMenu({ onAdd, onClose }: AddNodeMenuProps) {
+  const types: NodeType[] = ["trigger", "agent", "code", "condition", "output"];
+  return (
+    <div className="pe-add-menu-backdrop" onClick={onClose}>
+      <div className="pe-add-menu" onClick={(e) => e.stopPropagation()}>
+        <h3 className="pe-add-menu-title">Add Node</h3>
+        {types.map((t) => (
+          <button
+            key={t}
+            type="button"
+            className="pe-add-menu-item"
+            onClick={() => {
+              onAdd(t);
+              onClose();
+            }}
+          >
+            <span className="pe-add-menu-icon" style={{ background: NODE_COLORS[t] }}>
+              {NODE_ICONS[t]}
+            </span>
+            <span className="pe-add-menu-label">{NODE_LABELS[t]}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Main Component ──────────────────────────────────────
@@ -224,30 +527,77 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isSaving, setIsSaving] = useState(false);
-  /** Track when a new pipeline is being edited but not yet saved to Convex. */
   const [isNewUnsaved, setIsNewUnsaved] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
-  const workerAgents = useMemo(
-    () => agents,
-    [agents],
-  );
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: "#3f78c7" } }, eds)),
+    (connection: Connection) =>
+      setEdges((eds) => addEdge({ ...connection, ...defaultEdgeOptions }, eds)),
     [setEdges],
   );
+
+  const onSelectionChange = useCallback(
+    ({ nodes: sel }: OnSelectionChangeParams) => {
+      if (sel.length === 1) {
+        setSelectedNode(sel[0]);
+      } else {
+        setSelectedNode(null);
+      }
+    },
+    [],
+  );
+
+  function updateNodeData(id: string, newData: Record<string, unknown>) {
+    setNodes((nds) =>
+      nds.map((n) => (n.id === id ? { ...n, data: newData } : n)),
+    );
+    if (selectedNode && selectedNode.id === id) {
+      setSelectedNode((prev) => (prev ? { ...prev, data: newData } : prev));
+    }
+  }
+
+  function deleteNode(id: string) {
+    setNodes((nds) => nds.filter((n) => n.id !== id));
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    if (selectedNode?.id === id) setSelectedNode(null);
+  }
+
+  function addNodeOfType(type: NodeType) {
+    const id = `${type}-${Date.now()}`;
+    const newNode: Node = {
+      id,
+      type,
+      position: { x: 300 + Math.random() * 100, y: 200 + Math.random() * 100 },
+      data: {
+        label: NODE_LABELS[type],
+        agentId: "",
+        agentColor: "",
+        condition: "",
+        script: "",
+        description: "",
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }
+
+  function handleAutoLayout() {
+    setNodes((nds) => autoLayoutNodes(nds, edges));
+  }
 
   function loadPipeline(pipeline: ConvexPipeline) {
     setActivePipeline(pipeline);
     setIsNewUnsaved(false);
     setPipelineName(pipeline.name);
+    setSelectedNode(null);
     setNodes(pipelineToFlowNodes(pipeline, agents));
     setEdges(pipelineToFlowEdges(pipeline));
   }
 
   function createNewPipeline() {
     const defaults = newDefaultPipelineState();
-    // Build a temporary ConvexPipeline-shaped object (no _id yet).
     const temp = {
       _id: "" as Id<"pipelines">,
       _creationTime: Date.now(),
@@ -264,6 +614,7 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
     setActivePipeline(temp);
     setIsNewUnsaved(true);
     setPipelineName(temp.name);
+    setSelectedNode(null);
     setNodes(pipelineToFlowNodes(temp, agents));
     setEdges(pipelineToFlowEdges(temp));
   }
@@ -278,7 +629,6 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
 
     try {
       if (isNewUnsaved || !activePipeline._id) {
-        // Create new pipeline in Convex
         const newId = await createPipeline({
           name,
           description: activePipeline.description ?? "",
@@ -291,7 +641,6 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
           createdBy: currentUserId ?? "unknown",
         });
 
-        // Build the saved doc shape so we can keep editing
         const saved: ConvexPipeline = {
           ...activePipeline,
           _id: newId,
@@ -303,7 +652,6 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
         setActivePipeline(saved);
         setIsNewUnsaved(false);
       } else {
-        // Update existing pipeline in Convex
         await updatePipeline({
           id: activePipeline._id,
           name,
@@ -333,6 +681,7 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
     await removePipeline({ id: activePipeline._id });
     setActivePipeline(null);
     setIsNewUnsaved(false);
+    setSelectedNode(null);
     setNodes([]);
     setEdges([]);
     setPipelineName("");
@@ -359,7 +708,7 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
     const agent = agents.find((a) => a.id === agentId);
     if (!agent) return;
 
-    const bounds = (event.target as HTMLElement).closest(".react-flow")?.getBoundingClientRect();
+    const bounds = reactFlowWrapper.current?.getBoundingClientRect();
     if (!bounds) return;
 
     const position = {
@@ -374,27 +723,10 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
       data: {
         label: agent.name,
         agentId: agent.id,
-        color: agent.color,
-      },
-    };
-
-    setNodes((nds) => [...nds, newNode]);
-  }
-
-  function addSpecialNode(type: "condition" | "parallel-split" | "parallel-join") {
-    const labels: Record<string, string> = {
-      condition: "Condition",
-      "parallel-split": "Split",
-      "parallel-join": "Join",
-    };
-
-    const newNode: Node = {
-      id: `${type}-${Date.now()}`,
-      type,
-      position: { x: 300, y: 200 },
-      data: {
-        label: labels[type] ?? type,
-        condition: type === "condition" ? "error" : "",
+        agentColor: agent.color,
+        condition: "",
+        script: "",
+        description: "",
       },
     };
 
@@ -404,34 +736,39 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
   const pipelineList = pipelines ?? [];
 
   return (
-    <div className="pipeline-editor">
-      <div className="pipeline-sidebar">
-        <div className="pipeline-sidebar-section">
+    <div className="pe-editor">
+      {/* Left sidebar: pipeline list + agents */}
+      <div className="pe-sidebar">
+        <div className="pe-sidebar-section">
           <h3>Pipelines</h3>
-          <button type="button" className="pipeline-btn pipeline-btn-new" onClick={createNewPipeline}>
+          <button type="button" className="pe-btn pe-btn-primary pe-btn-full" onClick={createNewPipeline}>
             + New Pipeline
           </button>
-          <div className="pipeline-list">
+          <div className="pe-pipeline-list">
             {pipelineList.map((p) => (
               <button
                 type="button"
                 key={p._id}
-                className={`pipeline-list-item ${activePipeline?._id === p._id ? "pipeline-list-item-active" : ""}`}
+                className={`pe-pipeline-item ${activePipeline?._id === p._id ? "pe-pipeline-item-active" : ""}`}
                 onClick={() => loadPipeline(p)}
               >
-                {p.name}
+                <span className="pe-pipeline-item-name">{p.name}</span>
+                <span className="pe-pipeline-item-count">{p.nodes.length} nodes</span>
               </button>
             ))}
+            {pipelineList.length === 0 && (
+              <p className="pe-sidebar-empty">No pipelines yet</p>
+            )}
           </div>
         </div>
 
-        <div className="pipeline-sidebar-section">
+        <div className="pe-sidebar-section">
           <h3>Agents</h3>
-          <p className="pipeline-sidebar-hint">Drag onto canvas</p>
-          {workerAgents.map((agent) => (
+          <p className="pe-sidebar-hint">Drag onto canvas</p>
+          {agents.map((agent) => (
             <div
               key={agent.id}
-              className="pipeline-agent-chip"
+              className="pe-agent-chip"
               draggable
               onDragStart={(event) => {
                 event.dataTransfer.setData("application/pipeline-agent", agent.id);
@@ -439,72 +776,143 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
               }}
               style={{ "--agent-color": agent.color } as CSSProperties}
             >
-              <span className="pipeline-agent-dot" />
+              <span className="pe-agent-dot" />
               <span>{agent.name}</span>
             </div>
           ))}
         </div>
-
-        <div className="pipeline-sidebar-section">
-          <h3>Nodes</h3>
-          <button type="button" className="pipeline-btn" onClick={() => addSpecialNode("condition")}>
-            + Condition
-          </button>
-          <button type="button" className="pipeline-btn" onClick={() => addSpecialNode("parallel-split")}>
-            + Parallel Split
-          </button>
-          <button type="button" className="pipeline-btn" onClick={() => addSpecialNode("parallel-join")}>
-            + Parallel Join
-          </button>
-        </div>
       </div>
 
-      <div className="pipeline-canvas">
-        <div className="pipeline-toolbar">
-          {activePipeline && (
+      {/* Center: canvas */}
+      <div className="pe-canvas-area">
+        {/* Toolbar */}
+        <div className="pe-toolbar">
+          {activePipeline ? (
             <>
               <input
-                className="pipeline-name-input"
+                className="pe-toolbar-name"
                 value={pipelineName}
                 onChange={(e) => setPipelineName(e.target.value)}
                 placeholder="Pipeline name..."
               />
-              <button type="button" className="pipeline-btn pipeline-btn-save" onClick={() => void savePipeline()} disabled={isSaving}>
+              <div className="pe-toolbar-divider" />
+              <button
+                type="button"
+                className="pe-toolbar-btn"
+                onClick={() => setShowAddMenu(true)}
+                title="Add node"
+              >
+                + Node
+              </button>
+              <button
+                type="button"
+                className="pe-toolbar-btn"
+                onClick={handleAutoLayout}
+                title="Auto-layout (DAG)"
+              >
+                Layout
+              </button>
+              {selectedNode && (
+                <button
+                  type="button"
+                  className="pe-toolbar-btn pe-toolbar-btn-danger"
+                  onClick={() => deleteNode(selectedNode.id)}
+                  title="Delete selected node"
+                >
+                  Delete
+                </button>
+              )}
+              <div className="pe-toolbar-spacer" />
+              <button
+                type="button"
+                className="pe-toolbar-btn pe-toolbar-btn-save"
+                onClick={() => void savePipeline()}
+                disabled={isSaving}
+              >
                 {isSaving ? "Saving..." : "Save"}
               </button>
-              <button type="button" className="pipeline-btn pipeline-btn-execute" onClick={() => void executePipelineHandler()}>
-                Execute
+              <button
+                type="button"
+                className="pe-toolbar-btn pe-toolbar-btn-run"
+                onClick={() => void executePipelineHandler()}
+                title="Execute pipeline"
+              >
+                Run
               </button>
-              <button type="button" className="pipeline-btn pipeline-btn-delete" onClick={() => void deletePipeline()}>
+              <button
+                type="button"
+                className="pe-toolbar-btn pe-toolbar-btn-danger"
+                onClick={() => void deletePipeline()}
+                title="Delete pipeline"
+              >
                 Delete
               </button>
             </>
+          ) : (
+            <span className="pe-toolbar-hint">Select or create a pipeline to begin</span>
           )}
         </div>
 
-        {activePipeline ? (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            nodeTypes={nodeTypes}
-            fitView
-            colorMode="dark"
-          >
-            <Background />
-            <Controls />
-            <MiniMap />
-          </ReactFlow>
-        ) : (
-          <div className="pipeline-empty">
-            <p>Select a pipeline or create a new one to get started.</p>
-          </div>
-        )}
+        {/* ReactFlow canvas */}
+        <div className="pe-flow-wrapper" ref={reactFlowWrapper}>
+          {activePipeline ? (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onSelectionChange={onSelectionChange}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              nodeTypes={nodeTypes}
+              defaultEdgeOptions={defaultEdgeOptions}
+              fitView
+              colorMode="dark"
+              snapToGrid
+              snapGrid={[20, 20]}
+              deleteKeyCode="Delete"
+              multiSelectionKeyCode="Shift"
+            >
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#2a3a4a" />
+              <Controls showInteractive={false} />
+              <MiniMap
+                nodeStrokeWidth={3}
+                pannable
+                zoomable
+                style={{ background: "#0e1525" }}
+              />
+            </ReactFlow>
+          ) : (
+            <div className="pe-empty-state">
+              <div className="pe-empty-icon">&#x2B13;</div>
+              <h3>Pipeline Editor</h3>
+              <p>Select an existing pipeline from the sidebar, or create a new one to start building your workflow.</p>
+              <button type="button" className="pe-btn pe-btn-primary" onClick={createNewPipeline}>
+                Create Pipeline
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Right property panel (when node selected) */}
+      {selectedNode && activePipeline && (
+        <PropertyPanel
+          node={selectedNode}
+          agents={agents}
+          onUpdate={updateNodeData}
+          onDelete={deleteNode}
+        />
+      )}
+
+      {/* Add-node modal */}
+      {showAddMenu && (
+        <AddNodeMenu
+          onAdd={addNodeOfType}
+          onClose={() => setShowAddMenu(false)}
+        />
+      )}
     </div>
   );
 }

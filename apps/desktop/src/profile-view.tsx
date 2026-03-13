@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import type { CSSProperties } from "react";
 import {
   useProfile,
   usePublicArtifacts,
@@ -25,283 +24,6 @@ interface ProfileViewProps {
 type TabKey = "projects" | "public" | "starred";
 
 // ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 24,
-    padding: 24,
-    fontFamily: "var(--font-ui)",
-    color: "var(--color-text)",
-    background: "var(--color-background)",
-    minHeight: "100%",
-    overflowY: "auto",
-  },
-  profileHeader: {
-    display: "flex",
-    gap: 20,
-    alignItems: "flex-start",
-    padding: 20,
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--panel-radius)",
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: "50%",
-    background: "var(--color-accent)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 28,
-    fontWeight: 700,
-    color: "#fff",
-    flexShrink: 0,
-    overflow: "hidden",
-  },
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover" as const,
-    borderRadius: "50%",
-  },
-  profileInfo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    flex: 1,
-    minWidth: 0,
-  },
-  displayName: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--color-text-bright)",
-    margin: 0,
-    wordBreak: "break-word" as const,
-  },
-  handle: {
-    fontSize: 14,
-    color: "var(--color-text-dim)",
-    fontFamily: "var(--font-mono)",
-    margin: 0,
-  },
-  bio: {
-    fontSize: 14,
-    color: "var(--color-text)",
-    lineHeight: 1.5,
-    margin: "4px 0 0 0",
-  },
-  editBtn: {
-    padding: "6px 14px",
-    fontSize: 13,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 500,
-    background: "var(--color-panel)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--panel-radius)",
-    color: "var(--color-text)",
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-    flexShrink: 0,
-    alignSelf: "flex-start",
-  },
-  // Edit mode
-  editForm: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    flex: 1,
-  },
-  editField: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  editLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--color-text-dim)",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.05em",
-  },
-  editInput: {
-    padding: "8px 10px",
-    fontSize: 14,
-    fontFamily: "var(--font-ui)",
-    background: "var(--color-input)",
-    border: "1px solid var(--color-input-border)",
-    borderRadius: "var(--panel-radius)",
-    color: "var(--color-text)",
-    outline: "none",
-  },
-  editTextarea: {
-    padding: "8px 10px",
-    fontSize: 14,
-    fontFamily: "var(--font-ui)",
-    background: "var(--color-input)",
-    border: "1px solid var(--color-input-border)",
-    borderRadius: "var(--panel-radius)",
-    color: "var(--color-text)",
-    outline: "none",
-    resize: "vertical" as const,
-    minHeight: 60,
-  },
-  editSelect: {
-    padding: "8px 10px",
-    fontSize: 14,
-    fontFamily: "var(--font-ui)",
-    background: "var(--color-input)",
-    border: "1px solid var(--color-input-border)",
-    borderRadius: "var(--panel-radius)",
-    color: "var(--color-text)",
-    outline: "none",
-  },
-  editActions: {
-    display: "flex",
-    gap: 8,
-    marginTop: 4,
-  },
-  saveBtn: {
-    padding: "6px 16px",
-    fontSize: 13,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 600,
-    background: "var(--color-accent)",
-    border: "none",
-    borderRadius: "var(--panel-radius)",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  cancelBtn: {
-    padding: "6px 16px",
-    fontSize: 13,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 500,
-    background: "var(--color-panel)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--panel-radius)",
-    color: "var(--color-text)",
-    cursor: "pointer",
-  },
-  // Stats
-  statsRow: {
-    display: "flex",
-    gap: 24,
-    padding: "12px 20px",
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--panel-radius)",
-  },
-  statItem: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 2,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "var(--color-text-bright)",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "var(--color-text-dim)",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.04em",
-  },
-  // Tabs
-  tabBar: {
-    display: "flex",
-    gap: 0,
-    borderBottom: "1px solid var(--color-border)",
-  },
-  tab: {
-    padding: "10px 20px",
-    fontSize: 14,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 500,
-    background: "none",
-    border: "none",
-    borderBottom: "2px solid transparent",
-    color: "var(--color-text-dim)",
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  tabActive: {
-    color: "var(--color-text-bright)",
-    borderBottomColor: "var(--color-accent)",
-  },
-  // Grid
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: 14,
-  },
-  card: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    padding: 14,
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--panel-radius)",
-  },
-  cardName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "var(--color-text-bright)",
-    margin: 0,
-    wordBreak: "break-word" as const,
-  },
-  cardDesc: {
-    fontSize: 13,
-    color: "var(--color-text-dim)",
-    margin: 0,
-    lineHeight: 1.4,
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical" as any,
-    overflow: "hidden",
-  },
-  cardMeta: {
-    fontSize: 11,
-    color: "var(--color-text-dim)",
-    fontFamily: "var(--font-mono)",
-  },
-  typeBadge: {
-    display: "inline-block",
-    fontSize: 10,
-    fontWeight: 600,
-    fontFamily: "var(--font-mono)",
-    padding: "1px 6px",
-    borderRadius: 4,
-    textTransform: "uppercase" as const,
-    marginRight: 6,
-  },
-  emptyState: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    color: "var(--color-text-dim)",
-    fontSize: 14,
-    fontStyle: "italic",
-  },
-  loading: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    color: "var(--color-text-dim)",
-    fontSize: 13,
-  },
-};
-
-// ---------------------------------------------------------------------------
 // Badge colours
 // ---------------------------------------------------------------------------
 
@@ -310,6 +32,24 @@ const TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
   harness: { bg: "#7c3aed22", fg: "#a78bfa" },
   pipeline: { bg: "#059b6822", fg: "#34d399" },
   soul: { bg: "#d9770622", fg: "#fb923c" },
+};
+
+// ---------------------------------------------------------------------------
+// Activity kind icons (simple text glyphs)
+// ---------------------------------------------------------------------------
+
+const KIND_ICONS: Record<string, string> = {
+  Project: "\u25A0",         // filled square
+  "Public Project": "\u25C6", // diamond
+  "Public Harness": "\u25B2", // triangle
+  Star: "\u2605",             // star
+};
+
+const KIND_COLORS: Record<string, string> = {
+  Project: "#60a5fa",
+  "Public Project": "#34d399",
+  "Public Harness": "#a78bfa",
+  Star: "#fbbf24",
 };
 
 // ---------------------------------------------------------------------------
@@ -354,6 +94,19 @@ function formatDateLabel(value?: number | string): string {
   });
 }
 
+function relativeTime(ts: number): string {
+  const now = Date.now();
+  const diff = now - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDateLabel(ts);
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -370,34 +123,38 @@ function ArtifactCard({ artifact }: { artifact: any }) {
   const tags = Array.isArray(artifact.tags) ? artifact.tags : [];
 
   return (
-    <div style={styles.card}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <span style={{ ...styles.typeBadge, background: c.bg, color: c.fg }}>
+    <div className="pv-artifact-card">
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          className="pv-type-badge"
+          style={{ background: c.bg, color: c.fg }}
+        >
           {typeKey}
         </span>
-        <h4 style={styles.cardName}>{displayName}</h4>
+        <h4 className="pv-card-name">{displayName}</h4>
       </div>
       {description && (
-        <p style={styles.cardDesc}>{description}</p>
+        <p className="pv-card-desc">{description}</p>
       )}
       {tags.length > 0 && (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {tags.map((t: string) => (
-            <span
-              key={t}
-              style={{
-                fontSize: 10,
-                padding: "1px 6px",
-                borderRadius: 999,
-                background: "var(--color-panel)",
-                color: "var(--color-text-dim)",
-              }}
-            >
+            <span key={t} className="pv-tag">
               {t}
             </span>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, description }: { icon: string; title: string; description: string }) {
+  return (
+    <div className="pv-empty-state">
+      <span className="pv-empty-icon">{icon}</span>
+      <span className="pv-empty-title">{title}</span>
+      <span className="pv-empty-desc">{description}</span>
     </div>
   );
 }
@@ -425,24 +182,24 @@ export function ProfileView({ userId, isOwnProfile }: ProfileViewProps) {
 
   if (!userId) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>No user selected.</div>
+      <div className="pv-container">
+        <EmptyState icon="\u{1F464}" title="No user selected" description="Select a user to view their profile." />
       </div>
     );
   }
 
   if (profile === undefined) {
     return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading profile...</div>
+      <div className="pv-container">
+        <div className="pv-loading">Loading profile...</div>
       </div>
     );
   }
 
   if (profile === null) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>Profile not found.</div>
+      <div className="pv-container">
+        <EmptyState icon="\u{1F50D}" title="Profile not found" description="This user doesn't seem to exist." />
       </div>
     );
   }
@@ -484,6 +241,7 @@ export function ProfileView({ userId, isOwnProfile }: ProfileViewProps) {
     profile.profileVisibility !== "public" ? "Switch visibility to public when you're ready" : null,
   ].filter((item): item is string => Boolean(item));
   const profileCompletion = Math.round(((5 - checklistItems.length) / 5) * 100);
+  const completedItems = 5 - checklistItems.length;
   const joinedAt = profile._creationTime ?? undefined;
   const recentActivity = [
     ...(myProjects ?? []).map((project) => ({
@@ -516,261 +274,268 @@ export function ProfileView({ userId, isOwnProfile }: ProfileViewProps) {
     })),
   ]
     .sort((left, right) => right.ts - left.ts)
-    .slice(0, 6);
+    .slice(0, 8);
 
   // Tabs config
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: "projects", label: `Projects (${projectCount})` },
-    { key: "public", label: `Public Artifacts (${publicArtifactCount})` },
-    { key: "starred", label: `Starred (${starsGiven})` },
+  const tabs: { key: TabKey; label: string; count: number; emptyIcon: string; emptyTitle: string; emptyDesc: string }[] = [
+    { key: "projects", label: "Projects", count: projectCount, emptyIcon: "\u{1F4C1}", emptyTitle: "No projects yet", emptyDesc: "Create a project to get started building." },
+    { key: "public", label: "Public", count: publicArtifactCount, emptyIcon: "\u{1F310}", emptyTitle: "Nothing published", emptyDesc: "Publish a project or harness to share your work with the community." },
+    { key: "starred", label: "Starred", count: starsGiven, emptyIcon: "\u2B50", emptyTitle: "No stars yet", emptyDesc: "Star projects you find interesting to bookmark them here." },
   ];
 
   // Current tab data
   let tabData: any[] | undefined;
-  let tabEmpty: string;
+  const currentTab = tabs.find((t) => t.key === activeTab)!;
   switch (activeTab) {
     case "projects":
       tabData = myProjects;
-      tabEmpty = "No projects yet.";
       break;
     case "public":
       tabData = publicArtifacts
         ? [...(publicArtifacts.harnesses ?? []), ...(publicArtifacts.projects ?? [])]
         : undefined;
-      tabEmpty = "No public artifacts yet.";
       break;
     case "starred":
       tabData = userStars;
-      tabEmpty = "No starred items yet.";
       break;
   }
 
   return (
-    <div style={styles.container}>
-      {/* Profile header */}
-      <div style={styles.profileHeader}>
-        <div style={styles.avatar}>
-          {profile.avatarUrl ? (
-            <img
-              src={profile.avatarUrl}
-              alt={profile.displayName ?? "Avatar"}
-              style={styles.avatarImg}
+    <div className="pv-container">
+      {/* ── Hero header card ── */}
+      <div className="pv-hero">
+        <div className="pv-hero-banner" />
+        <div className="pv-hero-body">
+          <div className="pv-avatar-large">
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.displayName ?? "Avatar"}
+                className="pv-avatar-img"
+              />
+            ) : (
+              getInitials(profile.displayName)
+            )}
+          </div>
+
+          <div className="pv-hero-info">
+            {editing ? (
+              <div className="pv-edit-form">
+                <div className="pv-edit-field">
+                  <label className="pv-edit-label">Display Name</label>
+                  <input
+                    className="pv-edit-input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Display name"
+                  />
+                </div>
+                <div className="pv-edit-field">
+                  <label className="pv-edit-label">Handle</label>
+                  <input
+                    className="pv-edit-input"
+                    value={editHandle}
+                    onChange={(e) => setEditHandle(e.target.value)}
+                    placeholder="handle"
+                  />
+                </div>
+                <div className="pv-edit-field">
+                  <label className="pv-edit-label">Bio</label>
+                  <textarea
+                    className="pv-edit-textarea"
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    placeholder="Write a short bio..."
+                  />
+                </div>
+                <div className="pv-edit-field">
+                  <label className="pv-edit-label">Profile Visibility</label>
+                  <select
+                    className="pv-edit-select"
+                    value={editVisibility}
+                    onChange={(e) => setEditVisibility(e.target.value as "private" | "workspace" | "public")}
+                  >
+                    <option value="private">Private</option>
+                    <option value="workspace">Workspace</option>
+                    <option value="public">Public</option>
+                  </select>
+                </div>
+                <div className="pv-edit-actions">
+                  <button className="pv-btn-primary" onClick={saveProfile}>
+                    Save
+                  </button>
+                  <button className="pv-btn-secondary" onClick={cancelEditing}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="pv-name-row">
+                  <h2 className="pv-display-name">
+                    {profile.displayName ?? "Unnamed User"}
+                  </h2>
+                  <span className="pv-visibility-badge">
+                    {formatVisibilityLabel(profile.profileVisibility)}
+                  </span>
+                </div>
+                {profile.handle && (
+                  <p className="pv-handle">@{profile.handle}</p>
+                )}
+                {profile.bio && <p className="pv-bio">{profile.bio}</p>}
+                <div className="pv-hero-meta">
+                  <span className="pv-meta-item">Joined {formatDateLabel(joinedAt)}</span>
+                  {profile.handle && (
+                    <span className="pv-meta-item">Findable as @{profile.handle}</span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="pv-hero-actions">
+            {isOwnProfile && !editing && (
+              <button className="pv-btn-secondary" onClick={startEditing}>
+                Edit Profile
+              </button>
+            )}
+            {!isOwnProfile && (
+              <>
+                <button className="pv-btn-primary">Follow</button>
+                <button className="pv-btn-secondary">Message</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Stats row ── */}
+      <div className="pv-stats-row">
+        <div className="pv-stat">
+          <span className="pv-stat-value">{projectCount}</span>
+          <span className="pv-stat-label">Projects</span>
+        </div>
+        <div className="pv-stat-divider" />
+        <div className="pv-stat">
+          <span className="pv-stat-value">{publicArtifactCount}</span>
+          <span className="pv-stat-label">Public</span>
+        </div>
+        <div className="pv-stat-divider" />
+        <div className="pv-stat">
+          <span className="pv-stat-value">{starsGiven}</span>
+          <span className="pv-stat-label">Stars</span>
+        </div>
+        <div className="pv-stat-divider" />
+        <div className="pv-stat">
+          <span className="pv-stat-value">{formatVisibilityLabel(profile.profileVisibility)}</span>
+          <span className="pv-stat-label">Visibility</span>
+        </div>
+      </div>
+
+      {/* ── Profile completion (own profile only) ── */}
+      {isOwnProfile && (
+        <div className="pv-completion-card">
+          <div className="pv-completion-header">
+            <div>
+              <h3 className="pv-section-title">Profile Completion</h3>
+              <span className="pv-completion-fraction">{completedItems} of 5 complete</span>
+            </div>
+            <span className="pv-completion-pct">{profileCompletion}%</span>
+          </div>
+          <div className="pv-progress-track">
+            <div
+              className="pv-progress-fill"
+              style={{ width: `${profileCompletion}%` }}
             />
-          ) : (
-            getInitials(profile.displayName)
+          </div>
+          {checklistItems.length > 0 && (
+            <div className="pv-checklist">
+              {[
+                { label: "Add a display name", done: !!profile.displayName },
+                { label: "Claim a handle", done: !!profile.handle },
+                { label: "Write a short bio", done: !!profile.bio },
+                { label: "Upload an avatar", done: !!profile.avatarUrl },
+                { label: "Switch visibility to public", done: profile.profileVisibility === "public" },
+              ].map((step) => (
+                <div key={step.label} className={`pv-checklist-item ${step.done ? "pv-checklist-done" : ""}`}>
+                  <span className="pv-check-icon">{step.done ? "\u2713" : "\u25CB"}</span>
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
+      )}
 
-        {editing ? (
-          <div style={styles.editForm}>
-            <div style={styles.editField}>
-              <label style={styles.editLabel}>Display Name</label>
-              <input
-                style={styles.editInput}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Display name"
-              />
-            </div>
-            <div style={styles.editField}>
-              <label style={styles.editLabel}>Handle</label>
-              <input
-                style={styles.editInput}
-                value={editHandle}
-                onChange={(e) => setEditHandle(e.target.value)}
-                placeholder="handle"
-              />
-            </div>
-            <div style={styles.editField}>
-              <label style={styles.editLabel}>Bio</label>
-              <textarea
-                style={styles.editTextarea}
-                value={editBio}
-                onChange={(e) => setEditBio(e.target.value)}
-                placeholder="Write a short bio..."
-              />
-            </div>
-            <div style={styles.editField}>
-              <label style={styles.editLabel}>Profile Visibility</label>
-              <select
-                style={styles.editSelect}
-                value={editVisibility}
-                onChange={(e) => setEditVisibility(e.target.value as "private" | "workspace" | "public")}
-              >
-                <option value="private">Private</option>
-                <option value="workspace">Workspace</option>
-                <option value="public">Public</option>
-              </select>
-            </div>
-            <div style={styles.editActions}>
-              <button style={styles.saveBtn} onClick={saveProfile}>
-                Save
-              </button>
-              <button style={styles.cancelBtn} onClick={cancelEditing}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={styles.profileInfo}>
-            <h2 style={styles.displayName}>
-              {profile.displayName ?? "Unnamed User"}
-            </h2>
-            {profile.handle && (
-              <p style={styles.handle}>@{profile.handle}</p>
-            )}
-            {profile.bio && <p style={styles.bio}>{profile.bio}</p>}
-          </div>
-        )}
-
-        {isOwnProfile && !editing && (
-          <button style={styles.editBtn} onClick={startEditing}>
-            Edit Profile
-          </button>
-        )}
-      </div>
-
-      {/* Stats row */}
-      <div style={styles.statsRow}>
-        <div style={styles.statItem}>
-          <span style={styles.statValue}>{projectCount}</span>
-          <span style={styles.statLabel}>Projects</span>
-        </div>
-        <div style={styles.statItem}>
-          <span style={styles.statValue}>{publicArtifactCount}</span>
-          <span style={styles.statLabel}>Public Items</span>
-        </div>
-        <div style={styles.statItem}>
-          <span style={styles.statValue}>{starsGiven}</span>
-          <span style={styles.statLabel}>Stars Given</span>
-        </div>
-        <div style={styles.statItem}>
-          <span style={styles.statValue}>{formatVisibilityLabel(profile.profileVisibility)}</span>
-          <span style={styles.statLabel}>Visibility</span>
-        </div>
-      </div>
-
-      <div style={{ ...styles.grid, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        <div style={styles.card}>
-          <span style={styles.cardMeta}>Profile Completion</span>
-          <h3 style={styles.cardName}>{profileCompletion}% ready</h3>
-          <p style={styles.cardDesc}>
-            {checklistItems.length > 0
-              ? checklistItems[0]
-              : "Your profile is ready to share across discovery surfaces."}
-          </p>
-        </div>
-        <div style={styles.card}>
-          <span style={styles.cardMeta}>Member Since</span>
-          <h3 style={styles.cardName}>{formatDateLabel(joinedAt)}</h3>
-          <p style={styles.cardDesc}>
-            {profile.handle
-              ? `People can find you at @${profile.handle}.`
-              : "Add a handle so other builders can mention and find you."}
-          </p>
-        </div>
-        <div style={styles.card}>
-          <span style={styles.cardMeta}>Publishing Snapshot</span>
-          <h3 style={styles.cardName}>
-            {publicArtifactCount > 0 ? `${publicArtifactCount} live artifacts` : "Nothing public yet"}
-          </h3>
-          <p style={styles.cardDesc}>
-            {publicArtifactCount > 0
-              ? "Discovery can surface your public projects and harnesses."
-              : "Publish a project or harness to start building a public footprint."}
-          </p>
-        </div>
-      </div>
-
-      {isOwnProfile && checklistItems.length > 0 ? (
-        <div style={{ ...styles.card, gap: 10 }}>
-          <div>
-            <span style={styles.cardMeta}>Profile Checklist</span>
-            <h3 style={{ ...styles.cardName, marginTop: 4 }}>Finish your creator page</h3>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {checklistItems.map((item) => (
-              <div
-                key={item}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  background: "var(--color-panel)",
-                  color: "var(--color-text)",
-                  fontSize: 13,
-                }}
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div style={{ ...styles.card, gap: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <div>
-            <span style={styles.cardMeta}>Recent Activity</span>
-            <h3 style={{ ...styles.cardName, marginTop: 4 }}>What this profile has been doing</h3>
-          </div>
-          <span style={styles.cardMeta}>{recentActivity.length} recent items</span>
+      {/* ── Activity timeline ── */}
+      <div className="pv-section-card">
+        <div className="pv-section-header">
+          <h3 className="pv-section-title">Recent Activity</h3>
+          <span className="pv-section-count">{recentActivity.length} items</span>
         </div>
         {recentActivity.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {recentActivity.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-panel)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-                  <span style={styles.cardName}>{item.title}</span>
-                  <span style={styles.cardMeta}>{formatDateLabel(item.ts)}</span>
+          <div className="pv-timeline">
+            {recentActivity.map((item, idx) => {
+              const icon = KIND_ICONS[item.kind] ?? "\u25CF";
+              const color = KIND_COLORS[item.kind] ?? "var(--color-accent)";
+              return (
+                <div key={item.id} className="pv-timeline-item">
+                  <div className="pv-timeline-rail">
+                    <span className="pv-timeline-dot" style={{ color }}>{icon}</span>
+                    {idx < recentActivity.length - 1 && <div className="pv-timeline-line" />}
+                  </div>
+                  <div className="pv-timeline-content">
+                    <div className="pv-timeline-top">
+                      <span className="pv-timeline-kind">{item.kind}</span>
+                      <span className="pv-timeline-time">{relativeTime(item.ts)}</span>
+                    </div>
+                    <span className="pv-timeline-title">{item.title}</span>
+                    {item.description && (
+                      <p className="pv-timeline-desc">{item.description}</p>
+                    )}
+                  </div>
                 </div>
-                <span style={styles.cardMeta}>{item.kind}</span>
-                <p style={{ ...styles.cardDesc, WebkitLineClamp: "unset" }}>{item.description}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div style={styles.emptyState}>No profile activity yet. Start a project or star something to seed this feed.</div>
+          <EmptyState
+            icon="\u{1F4AC}"
+            title="No activity yet"
+            description="Start a project or star something to seed this feed."
+          />
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={styles.tabBar}>
+      {/* ── Tabs ── */}
+      <div className="pv-tab-bar">
         {tabs.map((t) => (
           <button
             key={t.key}
-            style={{
-              ...styles.tab,
-              ...(activeTab === t.key ? styles.tabActive : {}),
-            }}
+            className={`pv-tab ${activeTab === t.key ? "pv-tab-active" : ""}`}
             onClick={() => setActiveTab(t.key)}
           >
-            {t.label}
+            <span className="pv-tab-label">{t.label}</span>
+            <span className="pv-tab-count">{t.count}</span>
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* ── Tab content ── */}
       {tabData === undefined ? (
-        <div style={styles.loading}>Loading...</div>
+        <div className="pv-loading">Loading...</div>
       ) : tabData.length > 0 ? (
-        <div style={styles.grid}>
+        <div className="pv-grid">
           {tabData.map((item: any) => (
             <ArtifactCard key={item._id} artifact={item} />
           ))}
         </div>
       ) : (
-        <div style={styles.emptyState}>{tabEmpty}</div>
+        <EmptyState
+          icon={currentTab.emptyIcon}
+          title={currentTab.emptyTitle}
+          description={currentTab.emptyDesc}
+        />
       )}
     </div>
   );
