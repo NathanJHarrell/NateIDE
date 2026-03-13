@@ -75,15 +75,11 @@ export function TerminalPane(props: TerminalPaneProps) {
   onResizeSessionRef.current = onResizeSession;
 
   const sessionStatus = useMemo(() => {
-    if (connectionState !== "live") {
-      return "offline";
-    }
-
     if (!terminal) {
-      return "starting";
+      return connectionState === "loading" ? "offline" : "starting";
     }
 
-    return terminal.status;
+    return terminal.status === "closed" ? "exited" : terminal.status;
   }, [connectionState, terminal]);
 
   useEffect(() => {
@@ -135,7 +131,7 @@ export function TerminalPane(props: TerminalPaneProps) {
     };
 
     const dataDisposable = xterm.onData((data) => {
-      if (!terminal?.id || connectionState !== "live") {
+      if (!terminal?.id) {
         return;
       }
 
@@ -155,7 +151,7 @@ export function TerminalPane(props: TerminalPaneProps) {
 
       currentFitAddon.fit();
 
-      if (terminal?.id && connectionState === "live") {
+      if (terminal?.id) {
         void onResizeSessionRef.current(terminal.id, currentTerminal.cols, currentTerminal.rows).catch((error) => {
           setTerminalNotice(
             error instanceof Error ? error.message : "Failed to resize terminal session.",
@@ -176,7 +172,7 @@ export function TerminalPane(props: TerminalPaneProps) {
   }, [connectionState, fontSize, terminal?.id]);
 
   useEffect(() => {
-    if (connectionState !== "live" || isCreatingSessionRef.current || terminal?.status === "running") {
+    if (connectionState === "loading" || isCreatingSessionRef.current || terminal?.status === "running") {
       return;
     }
 

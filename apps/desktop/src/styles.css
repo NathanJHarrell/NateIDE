@@ -592,6 +592,12 @@ button {
   padding: 12px;
 }
 
+.panel-shell-card-git .panel-body {
+  background:
+    radial-gradient(circle at top right, rgba(94, 165, 232, 0.09), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+}
+
 .panel-shell-card-thread .panel-body {
   display: flex;
   flex-direction: column;
@@ -1326,6 +1332,15 @@ button {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+.project-launcher-modal {
+  width: 680px;
+  max-width: min(92vw, 680px);
+  background:
+    radial-gradient(circle at top right, rgba(94, 165, 232, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 22%),
+    var(--color-surface);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -1339,6 +1354,20 @@ button {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--color-text-bright);
+}
+
+.project-launcher-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 520px;
+}
+
+.project-launcher-subtitle {
+  margin: 0;
+  color: var(--color-text-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .modal-close {
@@ -1400,10 +1429,78 @@ button {
 
 /* ---- Project Launcher fields ---- */
 
+.project-launcher-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 24px 0;
+}
+
+.project-launcher-tabs .view-tab {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  color: var(--color-text-dim);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  padding: 12px 14px;
+  text-align: left;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.project-launcher-tabs .view-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(94, 165, 232, 0.2);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.project-launcher-tabs .view-tab-active {
+  background: linear-gradient(180deg, rgba(94, 165, 232, 0.16), rgba(94, 165, 232, 0.06));
+  border-color: rgba(94, 165, 232, 0.28);
+  color: var(--color-text-bright);
+  box-shadow: inset 0 0 0 1px rgba(94, 165, 232, 0.08);
+}
+
+.project-launcher-body {
+  gap: 18px;
+  padding-top: 18px;
+}
+
+.project-launcher-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.project-launcher-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-launcher-section-title {
+  color: var(--color-text-bright);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.project-launcher-section-meta {
+  color: var(--color-text-dimmest);
+  font-size: 0.72rem;
+}
+
 .launcher-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
 }
 
 .launcher-field-label {
@@ -1413,14 +1510,73 @@ button {
 }
 
 .launcher-preview {
-  min-height: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 72px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(3, 6, 14, 0.68);
+  border: 1px dashed rgba(255, 255, 255, 0.09);
+}
+
+.launcher-preview-active {
+  border-style: solid;
+  border-color: rgba(94, 165, 232, 0.24);
+  background: linear-gradient(180deg, rgba(94, 165, 232, 0.08), rgba(94, 165, 232, 0.02));
 }
 
 .launcher-preview-path {
   font-size: 0.75rem;
   font-family: var(--font-mono);
-  color: var(--color-muted);
+  color: var(--color-text);
   word-break: break-all;
+}
+
+.project-launcher-preview-placeholder {
+  color: var(--color-text-dimmer);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.project-launcher-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.project-launcher-manual-form,
+.project-launcher-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.project-launcher-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 18px;
+  color: var(--color-text-dim);
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.project-launcher-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.project-launcher-footer .action-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.project-launcher-hint {
+  color: var(--color-text-dim);
+  font-size: 0.76rem;
+  line-height: 1.5;
 }
 
 .modal-footer {
@@ -1991,19 +2147,37 @@ button {
 .workspace-candidate {
   background: var(--color-panel-alt);
   border: 1px solid var(--color-panel-border);
-  border-radius: 6px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 14px;
   text-align: left;
-  transition: all 0.2s;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
 .workspace-candidate:hover {
-  background: var(--color-hover);
-  border-color: #444;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(94, 165, 232, 0.16);
+  transform: translateY(-1px);
+}
+
+.workspace-candidate:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.workspace-candidate-active {
+  background: linear-gradient(180deg, rgba(94, 165, 232, 0.12), rgba(94, 165, 232, 0.04));
+  border-color: rgba(94, 165, 232, 0.26);
 }
 
 .workspace-candidate-name { font-weight: 700; color: var(--color-text-bright); display: block; }
-.workspace-candidate-path { font-size: 0.75rem; color: var(--color-text-dimmer); display: block; margin-top: 2px; }
+.workspace-candidate-path {
+  font-size: 0.75rem;
+  color: var(--color-text-dimmer);
+  display: block;
+  margin-top: 4px;
+  word-break: break-word;
+}
 
 .workspace-candidate-badges {
   display: flex;
@@ -2134,6 +2308,156 @@ select.text-input {
 .action-button-secondary:hover {
   background: var(--color-hover);
   border-color: rgba(94, 165, 232, 0.28);
+}
+
+/* ---- Git Panel ---- */
+.git-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.git-summary-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(94, 165, 232, 0.14);
+  background:
+    linear-gradient(180deg, rgba(94, 165, 232, 0.12), rgba(94, 165, 232, 0.02)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.git-summary-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.git-branch-name {
+  margin-top: 8px;
+  color: var(--color-text-bright);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  word-break: break-word;
+}
+
+.git-summary-count-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  text-align: right;
+}
+
+.git-summary-count {
+  color: var(--color-text-bright);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.git-summary-label {
+  color: var(--color-text-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.git-summary-copy {
+  margin: 14px 0 0;
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.git-panel-header {
+  padding-top: 0;
+}
+
+.git-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.git-file-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.git-file-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.git-file-name {
+  color: var(--color-text-bright);
+  font-size: 0.83rem;
+  font-weight: 650;
+  word-break: break-word;
+}
+
+.git-file-path {
+  color: var(--color-text-dimmer);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.git-file-status {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(94, 165, 232, 0.12);
+  border: 1px solid rgba(94, 165, 232, 0.18);
+  color: var(--color-accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.git-empty-state {
+  padding: 22px 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+@media (max-width: 720px) {
+  .project-launcher-tabs,
+  .project-launcher-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-launcher-footer,
+  .git-summary-top,
+  .git-file-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .git-summary-count-block {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .git-file-status {
+    align-self: flex-start;
+  }
 }
 
 /* ---- Agent Routing (Chat) ---- */

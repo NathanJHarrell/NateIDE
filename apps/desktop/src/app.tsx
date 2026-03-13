@@ -108,7 +108,14 @@ import {
 // git status. These use fetch(API_ROOT + ...) and SSE.
 // ---------------------------------------------------------------------------
 
-const API_ROOT = "/api";
+const DEFAULT_DAEMON_ORIGIN = "http://127.0.0.1:4317";
+const API_ROOT_CANDIDATES = [
+  import.meta.env.VITE_API_ROOT,
+  "/api",
+  import.meta.env.VITE_LOCAL_DAEMON_URL,
+  DEFAULT_DAEMON_ORIGIN,
+].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+let resolvedApiRoot: string | null = null;
 const PROJECT_TABS_STORAGE_KEY = "nateide.project-tabs.v1";
 const SHELL_LAYOUT_STORAGE_KEY = "nateide.shell-layout.v1";
 const SHELL_ZONES: ShellZone[] = ["left", "center", "right", "bottom"];
@@ -209,6 +216,30 @@ function dirname(filePath: string): string {
   }
 
   return normalized.slice(0, lastSlash);
+}
+
+function splitWorkspaceRelativePath(filePath: string): { name: string; parent: string } {
+  const normalized = filePath.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+
+  if (parts.length === 0) {
+    return {
+      name: filePath,
+      parent: "workspace root",
+    };
+  }
+
+  if (parts.length === 1) {
+    return {
+      name: parts[0] ?? filePath,
+      parent: "workspace root",
+    };
+  }
+
+  return {
+    name: parts.at(-1) ?? filePath,
+    parent: parts.slice(0, -1).join("/"),
+  };
 }
 
 function isWindowsClient(): boolean {
@@ -409,25 +440,57 @@ function isDaemonUnavailableError(error: unknown): boolean {
 }
 
 async function requestJson<T>(pathname: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_ROOT}${pathname}`, init);
+  const apiRoots = resolvedApiRoot
+    ? [resolvedApiRoot]
+    : pathname === "/health"
+      ? API_ROOT_CANDIDATES
+      : API_ROOT_CANDIDATES.slice(0, 1);
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    let message = `${pathname} failed with ${response.status}`;
+  for (const apiRoot of apiRoots) {
+    const normalizedRoot = apiRoot.endsWith("/") ? apiRoot.slice(0, -1) : apiRoot;
 
     try {
-      const payload = (await response.json()) as { message?: string };
+      const response = await fetch(`${normalizedRoot}${pathname}`, init);
 
-      if (payload.message) {
-        message = payload.message;
+      if (!response.ok) {
+        let message = `${pathname} failed with ${response.status}`;
+
+        try {
+          const payload = (await response.json()) as { message?: string };
+
+          if (payload.message) {
+            message = payload.message;
+          }
+        } catch {
+          // Ignore JSON parsing failures and fall back to the status code.
+        }
+
+        const error = new Error(message);
+
+        if (!resolvedApiRoot && pathname === "/health") {
+          lastError = error;
+          continue;
+        }
+
+        throw error;
       }
-    } catch {
-      // Ignore JSON parsing failures and fall back to the status code.
-    }
 
-    throw new Error(message);
+      resolvedApiRoot = normalizedRoot;
+      return (await response.json()) as T;
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error("Unexpected error");
+
+      if (!resolvedApiRoot && pathname === "/health") {
+        lastError = normalizedError;
+        continue;
+      }
+
+      throw normalizedError;
+    }
   }
 
-  return (await response.json()) as T;
+  throw lastError ?? new Error(`${pathname} failed`);
 }
 
 function eventSummary(event: AppEvent): string {
@@ -1341,6 +1404,26 @@ function AppContent() {
     });
   }
 
+  function syncTerminalSnapshot(rootPath: string, terminalSnapshot: TerminalSessionSnapshot) {
+    setSessions((prev) => {
+      const session = prev.get(rootPath);
+
+      if (!session) {
+        return prev;
+      }
+
+      const nextSnapshot = structuredClone(session);
+      nextSnapshot.workspaceSnapshot.terminals = [
+        terminalSnapshot,
+        ...nextSnapshot.workspaceSnapshot.terminals.filter((entry) => entry.id !== terminalSnapshot.id),
+      ];
+
+      const next = new Map(prev);
+      next.set(rootPath, nextSnapshot);
+      return next;
+    });
+  }
+
   async function loadWorkspaceCandidates() {
     const candidates = await requestJson<WorkspaceCandidate[]>("/workspaces");
 
@@ -1721,51 +1804,75 @@ function AppContent() {
     rows: number;
     shell: string;
   }) {
-    if (connectionState !== "live") {
-      return;
-    }
-
     try {
-      await requestJson<TerminalSessionSnapshot>("/terminal/sessions", {
+      const snapshot = await requestJson<TerminalSessionSnapshot>("/terminal/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
+
+      startTransition(() => {
+        syncTerminalSnapshot(activeProjectPath ?? activeWorkspaceRoot, snapshot);
+        setConnectionState("live");
+        setNotice("");
+      });
     } catch (error) {
       startTransition(() => {
+        if (isDaemonUnavailableError(error)) {
+          setConnectionState("fallback");
+        }
         setNotice(getErrorMessage(error));
       });
     }
   }
 
   async function sendTerminalInput(terminalSessionId: string, data: string) {
-    if (connectionState !== "live") {
-      return;
-    }
+    try {
+      await requestJson<ThreadBootstrap>(
+        `/terminal/sessions/${encodeURIComponent(terminalSessionId)}/input`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ data }),
+        },
+      );
+      startTransition(() => {
+        setConnectionState("live");
+      });
+    } catch (error) {
+      if (isDaemonUnavailableError(error)) {
+        startTransition(() => {
+          setConnectionState("fallback");
+        });
+      }
 
-    await requestJson<ThreadBootstrap>(
-      `/terminal/sessions/${encodeURIComponent(terminalSessionId)}/input`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ data }),
-      },
-    );
+      throw error;
+    }
   }
 
   async function resizeInteractiveTerminal(terminalSessionId: string, cols: number, rows: number) {
-    if (connectionState !== "live") {
-      return;
-    }
+    try {
+      const snapshot = await requestJson<TerminalSessionSnapshot>(
+        `/terminal/sessions/${encodeURIComponent(terminalSessionId)}/resize`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ cols, rows }),
+        },
+      );
+      startTransition(() => {
+        syncTerminalSnapshot(activeProjectPath ?? activeWorkspaceRoot, snapshot);
+        setConnectionState("live");
+      });
+    } catch (error) {
+      if (isDaemonUnavailableError(error)) {
+        startTransition(() => {
+          setConnectionState("fallback");
+        });
+      }
 
-    await requestJson<TerminalSessionSnapshot>(
-      `/terminal/sessions/${encodeURIComponent(terminalSessionId)}/resize`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cols, rows }),
-      },
-    );
+      throw error;
+    }
   }
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
@@ -2066,25 +2173,56 @@ function AppContent() {
           </>
         );
       case "git":
-        return (
-          <>
-            <div className="panel-header panel-header-inline">
-              <h2>Branch</h2>
-              <span>{workspaceBootstrap.workspaceSnapshot.git.branch}</span>
-            </div>
-            <div className="chip-row">
-              {workspaceBootstrap.workspaceSnapshot.git.changedFiles.length > 0 ? (
-                workspaceBootstrap.workspaceSnapshot.git.changedFiles.map((path) => (
-                  <span key={path} className="chip">
-                    {path}
-                  </span>
-                ))
+        {
+          const git = workspaceBootstrap.workspaceSnapshot.git;
+
+          return (
+            <div className="git-panel">
+              <section className="git-summary-card">
+                <div className="git-summary-top">
+                  <div>
+                    <span className="eyebrow">active branch</span>
+                    <div className="git-branch-name">{git.branch}</div>
+                  </div>
+                  <div className="git-summary-count-block">
+                    <span className="git-summary-count">{git.changedFiles.length}</span>
+                    <span className="git-summary-label">
+                      {git.changedFiles.length === 1 ? "changed file" : "changed files"}
+                    </span>
+                  </div>
+                </div>
+                <p className="git-summary-copy">
+                  {git.changedFiles.length > 0
+                    ? "Tracked workspace changes are ready for review."
+                    : "Working tree is clean. New tracked changes will show up here."}
+                </p>
+              </section>
+              <div className="panel-header panel-header-inline git-panel-header">
+                <h2>Changed Files</h2>
+                <span>{git.changedFiles.length === 0 ? "clean" : `${git.changedFiles.length} pending`}</span>
+              </div>
+              {git.changedFiles.length > 0 ? (
+                <div className="git-file-list">
+                  {git.changedFiles.map((filePath) => {
+                    const { name, parent } = splitWorkspaceRelativePath(filePath);
+
+                    return (
+                      <article key={filePath} className="git-file-card">
+                        <div className="git-file-copy">
+                          <span className="git-file-name">{name}</span>
+                          <span className="git-file-path">{parent}</span>
+                        </div>
+                        <span className="git-file-status">changed</span>
+                      </article>
+                    );
+                  })}
+                </div>
               ) : (
-                <span className="empty-note">No tracked file changes yet.</span>
+                <div className="git-empty-state">No tracked file changes yet.</div>
               )}
             </div>
-          </>
-        );
+          );
+        }
       case "agents":
         return (
           <div className="agent-grid">
