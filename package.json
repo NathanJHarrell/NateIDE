@@ -8,7 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bunx concurrently -k -n convex,daemon,desktop -c auto \"bunx convex dev\" \"bun --cwd apps/daemon dev\" \"bun --cwd apps/desktop dev\"",
+    "dev": "bunx concurrently -n convex,daemon,desktop -c auto \"bunx convex dev 2>&1 || echo [convex] Convex exited — check .env.local for CONVEX_DEPLOYMENT\" \"bun --cwd apps/daemon dev\" \"bun --cwd apps/desktop dev\"",
+    "dev:local": "bunx concurrently -n daemon,desktop -c auto \"bun --cwd apps/daemon dev\" \"bun --cwd apps/desktop dev\"",
     "dev:desktop": "bun --cwd apps/desktop dev",
     "dev:daemon": "bun --cwd apps/daemon dev",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
