@@ -9,12 +9,14 @@ import type { Id } from "../../../convex/_generated/dataModel";
 // ---------------------------------------------------------------------------
 export function useCurrentUser() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const { signOut } = useAuthActions();
   const me = useMe();
   return {
     isAuthenticated,
     isLoading,
     user: me ?? null,
     userId: (me?._id ?? null) as Id<"users"> | null,
+    signOut,
   };
 }
 

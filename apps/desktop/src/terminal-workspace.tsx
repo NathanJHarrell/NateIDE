@@ -27,9 +27,18 @@ import { TerminalPane } from "./terminal-pane";
 
 type ConnectionState = "loading" | "live" | "fallback";
 
+type Rect = {
+  /** Percentage 0–100 */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 type TerminalInstance = {
   id: string;
   label: string;
+  rect: Rect;
   terminalSnapshot: TerminalSessionSnapshot | null;
 };
 
@@ -43,6 +52,7 @@ type TerminalWorkspaceProps = {
   onOpenSession: (input: {
     cols: number;
     cwd: string;
+    id?: string;
     rows: number;
     shell: string;
   }) => Promise<void>;
@@ -79,106 +89,73 @@ const TERMINAL_WORKSPACE_NAV_ITEMS: Array<{
 ];
 
 // ---------------------------------------------------------------------------
-// Grid layout calculation
+// Layout presets
 // ---------------------------------------------------------------------------
 
-type GridLayout = {
+type LayoutPreset = {
+  label: string;
   cols: number;
   rows: number;
-  cells: GridCell[];
 };
 
-type GridCell = {
-  index: number;
-  row: number;
-  col: number;
-  colSpan: number;
-};
+const LAYOUT_PRESETS: LayoutPreset[] = [
+  { label: "1", cols: 1, rows: 1 },
+  { label: "1×2", cols: 1, rows: 2 },
+  { label: "2×1", cols: 2, rows: 1 },
+  { label: "2×2", cols: 2, rows: 2 },
+  { label: "3×2", cols: 3, rows: 2 },
+  { label: "3×3", cols: 3, rows: 3 },
+  { label: "4×2", cols: 4, rows: 2 },
+  { label: "4×4", cols: 4, rows: 4 },
+];
 
-function computeGridLayout(count: number): GridLayout {
-  if (count === 0) {
-    return { cols: 1, rows: 1, cells: [] };
-  }
+function buildGridRects(cols: number, rows: number, count: number): Rect[] {
+  const rects: Rect[] = [];
+  const cellW = 100 / cols;
+  const cellH = 100 / rows;
+  let idx = 0;
 
-  if (count === 1) {
-    return {
-      cols: 1,
-      rows: 1,
-      cells: [{ index: 0, row: 0, col: 0, colSpan: 1 }],
-    };
-  }
-
-  if (count === 2) {
-    return {
-      cols: 2,
-      rows: 1,
-      cells: [
-        { index: 0, row: 0, col: 0, colSpan: 1 },
-        { index: 1, row: 0, col: 1, colSpan: 1 },
-      ],
-    };
-  }
-
-  if (count === 3) {
-    return {
-      cols: 2,
-      rows: 2,
-      cells: [
-        { index: 0, row: 0, col: 0, colSpan: 1 },
-        { index: 1, row: 0, col: 1, colSpan: 1 },
-        { index: 2, row: 1, col: 0, colSpan: 2 },
-      ],
-    };
-  }
-
-  if (count === 4) {
-    return {
-      cols: 2,
-      rows: 2,
-      cells: [
-        { index: 0, row: 0, col: 0, colSpan: 1 },
-        { index: 1, row: 0, col: 1, colSpan: 1 },
-        { index: 2, row: 1, col: 0, colSpan: 1 },
-        { index: 3, row: 1, col: 1, colSpan: 1 },
-      ],
-    };
-  }
-
-  // General case: cols = ceil(sqrt(n)), rows = ceil(n / cols)
-  const cols = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / cols);
-  const cells: GridCell[] = [];
-
-  let index = 0;
-
-  for (let row = 0; row < rows; row++) {
-    const remaining = count - index;
-    const itemsInRow = row === rows - 1 ? remaining : cols;
-    // If last row has fewer items, they stretch to fill
-    const colSpan = row === rows - 1 && remaining < cols
-      ? Math.floor(cols / remaining) + (0 < cols % remaining ? 1 : 0)
-      : 1;
-
-    for (let col = 0; col < itemsInRow; col++) {
-      // For the last row, compute span so items fill the full width
-      let span = 1;
-
-      if (row === rows - 1 && remaining < cols) {
-        const baseSpan = Math.floor(cols / remaining);
-        const extraCols = cols % remaining;
-        span = baseSpan + (col < extraCols ? 1 : 0);
-      }
-
-      cells.push({ index, row, col, colSpan: span });
-      index++;
+  for (let r = 0; r < rows && idx < count; r++) {
+    for (let c = 0; c < cols && idx < count; c++) {
+      rects.push({ x: c * cellW, y: r * cellH, w: cellW, h: cellH });
+      idx++;
     }
   }
 
-  return { cols, rows, cells };
+  return rects;
 }
 
 // ---------------------------------------------------------------------------
-// Styles (inline, self-contained)
+// Helpers
+// ---------------------------------------------------------------------------
+
+let nextTerminalId = 1;
+
+function generateTerminalId(): string {
+  return `tw-${Date.now()}-${nextTerminalId++}`;
+}
+
+function isMacPlatform(): boolean {
+  return typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+}
+
+function basename(filePath: string): string {
+  return filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? filePath;
+}
+
+const MIN_PANE_PCT = 8; // min 8% of container in any direction
+
+function clampRect(r: Rect): Rect {
+  return {
+    x: Math.max(0, Math.min(100 - MIN_PANE_PCT, r.x)),
+    y: Math.max(0, Math.min(100 - MIN_PANE_PCT, r.y)),
+    w: Math.max(MIN_PANE_PCT, Math.min(100 - r.x, r.w)),
+    h: Math.max(MIN_PANE_PCT, Math.min(100 - r.y, r.h)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Styles
 // ---------------------------------------------------------------------------
 
 const styles = {
@@ -188,183 +165,6 @@ const styles = {
     display: "flex",
     background: "var(--color-background)",
     zIndex: 1000,
-  } satisfies CSSProperties,
-
-  sidebar: {
-    width: 248,
-    minWidth: 248,
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-    padding: "14px 12px 12px",
-    background: "var(--color-surface)",
-    borderRight: "1px solid var(--color-border)",
-    overflow: "hidden",
-  } satisfies CSSProperties,
-
-  sidebarHeader: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    padding: "0 6px 12px",
-    borderBottom: "1px solid var(--color-border)",
-  } satisfies CSSProperties,
-
-  sidebarEyebrow: {
-    fontSize: 10,
-    fontFamily: "var(--font-ui)",
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    color: "var(--color-text-dimmest)",
-  } satisfies CSSProperties,
-
-  sidebarTitle: {
-    fontSize: 16,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 600,
-    color: "var(--color-text-bright)",
-  } satisfies CSSProperties,
-
-  sidebarPath: {
-    fontSize: 11,
-    fontFamily: "var(--font-mono)",
-    color: "var(--color-text-dimmer)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  } satisfies CSSProperties,
-
-  sidebarSection: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    minHeight: 0,
-  } satisfies CSSProperties,
-
-  sidebarSectionTitle: {
-    padding: "0 6px",
-    fontSize: 10,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 700,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    color: "var(--color-text-dimmest)",
-  } satisfies CSSProperties,
-
-  sidebarNavList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  } satisfies CSSProperties,
-
-  sidebarNavButton: (active: boolean): CSSProperties => ({
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "8px 10px",
-    background: active ? "var(--color-active)" : "transparent",
-    color: active ? "var(--color-text-bright)" : "var(--color-text-dim)",
-    border: "1px solid",
-    borderColor: active ? "var(--color-accent)" : "transparent",
-    borderRadius: 8,
-    cursor: "pointer",
-    textAlign: "left",
-    fontSize: 12,
-    fontFamily: "var(--font-ui)",
-    fontWeight: active ? 600 : 450,
-    transition: "all 0.15s ease",
-  }),
-
-  sidebarNavIcon: {
-    width: 16,
-    flexShrink: 0,
-    display: "inline-flex",
-    justifyContent: "center",
-  } satisfies CSSProperties,
-
-  sidebarTerminalList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    minHeight: 0,
-    overflow: "auto",
-    paddingRight: 4,
-  } satisfies CSSProperties,
-
-  sidebarTerminalButton: (active: boolean): CSSProperties => ({
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "9px 10px",
-    background: active ? "rgba(94, 165, 232, 0.12)" : "transparent",
-    color: active ? "var(--color-text-bright)" : "var(--color-text)",
-    border: "1px solid",
-    borderColor: active ? "rgba(94, 165, 232, 0.28)" : "var(--color-border)",
-    borderRadius: 8,
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "all 0.15s ease",
-  }),
-
-  sidebarTerminalIndex: (active: boolean): CSSProperties => ({
-    width: 18,
-    flexShrink: 0,
-    fontSize: 10,
-    fontFamily: "var(--font-mono)",
-    color: active ? "var(--color-accent)" : "var(--color-text-dimmer)",
-  }),
-
-  sidebarTerminalMeta: {
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  } satisfies CSSProperties,
-
-  sidebarTerminalLabel: {
-    fontSize: 12,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 500,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  } satisfies CSSProperties,
-
-  sidebarTerminalHint: {
-    fontSize: 10,
-    fontFamily: "var(--font-mono)",
-    color: "var(--color-text-dimmer)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  } satisfies CSSProperties,
-
-  sidebarNewTerminalButton: {
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "9px 10px",
-    fontSize: 12,
-    fontFamily: "var(--font-ui)",
-    fontWeight: 600,
-    color: "var(--color-text-bright)",
-    background: "rgba(94, 165, 232, 0.12)",
-    border: "1px solid rgba(94, 165, 232, 0.28)",
-    borderRadius: 8,
-    cursor: "pointer",
-  } satisfies CSSProperties,
-
-  sidebarFooter: {
-    marginTop: "auto",
-    padding: "12px 6px 0",
-    borderTop: "1px solid var(--color-border)",
-    fontSize: 10,
-    fontFamily: "var(--font-mono)",
-    color: "var(--color-text-dimmer)",
-    lineHeight: 1.5,
   } satisfies CSSProperties,
 
   main: {
@@ -454,6 +254,34 @@ const styles = {
     flexShrink: 0,
   } satisfies CSSProperties,
 
+  presetButton: (active: boolean): CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2px 8px",
+    fontSize: 11,
+    fontFamily: "var(--font-mono)",
+    fontWeight: active ? 600 : 400,
+    color: active ? "var(--color-text-bright)" : "var(--color-text-dim)",
+    background: active ? "var(--color-active)" : "transparent",
+    border: "1px solid",
+    borderColor: active ? "var(--color-accent)" : "var(--color-border)",
+    borderRadius: 4,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "all 0.1s ease",
+    lineHeight: "20px",
+  }),
+
+  presetGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    marginLeft: 8,
+    paddingLeft: 8,
+    borderLeft: "1px solid var(--color-border)",
+  } satisfies CSSProperties,
+
   backButton: {
     display: "flex",
     alignItems: "center",
@@ -470,31 +298,32 @@ const styles = {
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
 
-  grid: {
+  canvas: {
     flex: 1,
-    display: "grid",
-    gap: 2,
-    padding: 2,
-    overflow: "auto",
+    position: "relative",
+    overflow: "hidden",
     minHeight: 0,
   } satisfies CSSProperties,
 
-  cell: (focused: boolean, fullscreen: boolean): CSSProperties => ({
-    position: fullscreen ? "fixed" : "relative",
+  pane: (rect: Rect, focused: boolean, fullscreen: boolean): CSSProperties => ({
+    position: fullscreen ? "fixed" : "absolute",
     inset: fullscreen ? 0 : undefined,
-    zIndex: fullscreen ? 2000 : undefined,
+    left: fullscreen ? undefined : `${rect.x}%`,
+    top: fullscreen ? undefined : `${rect.y}%`,
+    width: fullscreen ? undefined : `${rect.w}%`,
+    height: fullscreen ? undefined : `${rect.h}%`,
+    zIndex: fullscreen ? 2000 : focused ? 2 : 1,
     display: "flex",
     flexDirection: "column",
-    minHeight: 0,
-    minWidth: 0,
     overflow: "hidden",
-    borderRadius: 4,
     border: `1px solid ${focused ? "var(--color-accent)" : "var(--color-border)"}`,
+    borderRadius: fullscreen ? 0 : 4,
     background: "var(--color-panel)",
     transition: "border-color 0.15s ease",
+    boxSizing: "border-box",
   }),
 
-  cellHeader: (focused: boolean): CSSProperties => ({
+  paneHeader: (focused: boolean): CSSProperties => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -503,12 +332,12 @@ const styles = {
     padding: "0 8px",
     background: focused ? "var(--color-active)" : "var(--color-surface)",
     borderBottom: "1px solid var(--color-border)",
-    cursor: "default",
+    cursor: "move",
     userSelect: "none",
     flexShrink: 0,
   }),
 
-  cellLabel: {
+  paneLabel: {
     fontSize: 11,
     fontFamily: "var(--font-ui)",
     fontWeight: 450,
@@ -518,7 +347,7 @@ const styles = {
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
 
-  cellIndex: {
+  paneIndex: {
     fontSize: 10,
     fontFamily: "var(--font-mono)",
     color: "var(--color-text-dimmer)",
@@ -526,14 +355,14 @@ const styles = {
     flexShrink: 0,
   } satisfies CSSProperties,
 
-  cellActions: {
+  paneActions: {
     display: "flex",
     alignItems: "center",
     gap: 2,
     flexShrink: 0,
   } satisfies CSSProperties,
 
-  cellActionButton: {
+  paneActionButton: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -548,24 +377,16 @@ const styles = {
     padding: 0,
   } satisfies CSSProperties,
 
-  cellBody: {
+  paneBody: {
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
   } satisfies CSSProperties,
 
-  // Override the terminal-live-card styles to fill the cell
   terminalWrapper: {
     height: "100%",
     display: "flex",
     flexDirection: "column",
-  } satisfies CSSProperties,
-
-  shortcutHint: {
-    fontSize: 10,
-    fontFamily: "var(--font-mono)",
-    color: "var(--color-text-dimmest)",
-    marginLeft: 4,
   } satisfies CSSProperties,
 
   labelInput: {
@@ -580,192 +401,64 @@ const styles = {
     outline: "none",
     width: 120,
   } satisfies CSSProperties,
+
+  // Resize handles
+  handleRight: {
+    position: "absolute",
+    top: 0,
+    right: -3,
+    width: 6,
+    height: "100%",
+    cursor: "ew-resize",
+    zIndex: 10,
+  } satisfies CSSProperties,
+
+  handleBottom: {
+    position: "absolute",
+    bottom: -3,
+    left: 0,
+    width: "100%",
+    height: 6,
+    cursor: "ns-resize",
+    zIndex: 10,
+  } satisfies CSSProperties,
+
+  handleCorner: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 10,
+    height: 10,
+    cursor: "nwse-resize",
+    zIndex: 11,
+  } satisfies CSSProperties,
+
+  handleLeft: {
+    position: "absolute",
+    top: 0,
+    left: -3,
+    width: 6,
+    height: "100%",
+    cursor: "ew-resize",
+    zIndex: 10,
+  } satisfies CSSProperties,
+
+  handleTop: {
+    position: "absolute",
+    top: -3,
+    left: 0,
+    width: "100%",
+    height: 6,
+    cursor: "ns-resize",
+    zIndex: 10,
+  } satisfies CSSProperties,
 };
-
-// ---------------------------------------------------------------------------
-// Resizable grid hook
-// ---------------------------------------------------------------------------
-
-type ResizeState = {
-  // Custom column widths as fractions (null means equal/auto)
-  colWidths: number[] | null;
-  // Custom row heights as fractions (null means equal/auto)
-  rowHeights: number[] | null;
-};
-
-function useResizableGrid(cols: number, rows: number) {
-  const [resizeState, setResizeState] = useState<ResizeState>({
-    colWidths: null,
-    rowHeights: null,
-  });
-
-  // Reset when grid shape changes
-  useEffect(() => {
-    setResizeState({ colWidths: null, rowHeights: null });
-  }, [cols, rows]);
-
-  const startColResize = useCallback(
-    (colIndex: number, startX: number, containerWidth: number) => {
-      const initialWidths = resizeState.colWidths ?? Array(cols).fill(1 / cols);
-
-      const onMouseMove = (e: MouseEvent) => {
-        const delta = (e.clientX - startX) / containerWidth;
-        const newWidths = [...initialWidths];
-        const minFraction = 0.1;
-
-        newWidths[colIndex] = Math.max(minFraction, initialWidths[colIndex] + delta);
-        newWidths[colIndex + 1] = Math.max(minFraction, initialWidths[colIndex + 1] - delta);
-
-        // Normalize
-        const total = newWidths.reduce((s, w) => s + w, 0);
-
-        for (let i = 0; i < newWidths.length; i++) {
-          newWidths[i] /= total;
-        }
-
-        setResizeState((prev) => ({ ...prev, colWidths: newWidths }));
-      };
-
-      const onMouseUp = () => {
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [cols, resizeState.colWidths],
-  );
-
-  const startRowResize = useCallback(
-    (rowIndex: number, startY: number, containerHeight: number) => {
-      const initialHeights = resizeState.rowHeights ?? Array(rows).fill(1 / rows);
-
-      const onMouseMove = (e: MouseEvent) => {
-        const delta = (e.clientY - startY) / containerHeight;
-        const newHeights = [...initialHeights];
-        const minFraction = 0.1;
-
-        newHeights[rowIndex] = Math.max(minFraction, initialHeights[rowIndex] + delta);
-        newHeights[rowIndex + 1] = Math.max(minFraction, initialHeights[rowIndex + 1] - delta);
-
-        // Normalize
-        const total = newHeights.reduce((s, h) => s + h, 0);
-
-        for (let i = 0; i < newHeights.length; i++) {
-          newHeights[i] /= total;
-        }
-
-        setResizeState((prev) => ({ ...prev, rowHeights: newHeights }));
-      };
-
-      const onMouseUp = () => {
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [rows, resizeState.rowHeights],
-  );
-
-  const gridTemplateColumns = resizeState.colWidths
-    ? resizeState.colWidths.map((w) => `${(w * 100).toFixed(2)}%`).join(" ")
-    : `repeat(${cols}, 1fr)`;
-
-  const gridTemplateRows = resizeState.rowHeights
-    ? resizeState.rowHeights.map((h) => `${(h * 100).toFixed(2)}%`).join(" ")
-    : `repeat(${rows}, 1fr)`;
-
-  return { gridTemplateColumns, gridTemplateRows, startColResize, startRowResize };
-}
-
-// ---------------------------------------------------------------------------
-// Resize handle components
-// ---------------------------------------------------------------------------
-
-function ColResizeHandle({
-  colIndex,
-  row,
-  totalRows,
-  onStartResize,
-}: {
-  colIndex: number;
-  row: number;
-  totalRows: number;
-  onStartResize: (colIndex: number, startX: number, containerWidth: number) => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        right: -3,
-        width: 6,
-        height: "100%",
-        cursor: "col-resize",
-        zIndex: 10,
-      }}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        const gridEl = (e.currentTarget as HTMLElement).closest("[data-terminal-grid]");
-
-        if (gridEl) {
-          onStartResize(colIndex, e.clientX, gridEl.clientWidth);
-        }
-      }}
-    />
-  );
-}
-
-function RowResizeHandle({
-  rowIndex,
-  onStartResize,
-}: {
-  rowIndex: number;
-  onStartResize: (rowIndex: number, startY: number, containerHeight: number) => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: -3,
-        left: 0,
-        width: "100%",
-        height: 6,
-        cursor: "row-resize",
-        zIndex: 10,
-      }}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        const gridEl = (e.currentTarget as HTMLElement).closest("[data-terminal-grid]");
-
-        if (gridEl) {
-          onStartResize(rowIndex, e.clientY, gridEl.clientHeight);
-        }
-      }}
-    />
-  );
-}
 
 // ---------------------------------------------------------------------------
 // TerminalWorkspace component
 // ---------------------------------------------------------------------------
 
-let nextTerminalId = 1;
-
-function generateTerminalId(): string {
-  return `tw-${Date.now()}-${nextTerminalId++}`;
-}
+export { type TerminalWorkspaceView, type TerminalWorkspaceProps };
 
 export function TerminalWorkspace(props: TerminalWorkspaceProps) {
   const {
@@ -779,16 +472,24 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     onResizeSession,
     onSendInput,
     onBackToIde,
-    activeView = "terminals",
+    activeView,
     onNavigateView,
   } = props;
 
+  // -- State -----------------------------------------------------------------
+
   const [instances, setInstances] = useState<TerminalInstance[]>(() => {
-    // Initialize with existing terminals, or create a first one
     if (externalTerminals.length > 0) {
+      const rects = buildGridRects(
+        Math.ceil(Math.sqrt(externalTerminals.length)),
+        Math.ceil(externalTerminals.length / Math.ceil(Math.sqrt(externalTerminals.length))),
+        externalTerminals.length,
+      );
+
       return externalTerminals.map((t, i) => ({
         id: t.id,
         label: t.title || `Terminal ${i + 1}`,
+        rect: rects[i] ?? { x: 0, y: 0, w: 100, h: 100 },
         terminalSnapshot: t,
       }));
     }
@@ -797,6 +498,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
       {
         id: generateTerminalId(),
         label: "Terminal 1",
+        rect: { x: 0, y: 0, w: 100, h: 100 },
         terminalSnapshot: null,
       },
     ];
@@ -806,7 +508,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
-  const gridRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   // Sync external terminal snapshots into instances
   useEffect(() => {
@@ -821,12 +523,12 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
         return inst;
       });
 
-      // Add any new external terminals not yet tracked
       for (const ext of externalTerminals) {
         if (!updated.some((u) => u.id === ext.id)) {
           updated.push({
             id: ext.id,
             label: ext.title || `Terminal ${updated.length + 1}`,
+            rect: { x: 0, y: 0, w: 100, h: 100 },
             terminalSnapshot: ext,
           });
         }
@@ -836,19 +538,27 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     });
   }, [externalTerminals]);
 
-  // ---------- Actions ----------
+  // -- Actions ---------------------------------------------------------------
 
   const addTerminal = useCallback(() => {
     const id = generateTerminalId();
 
-    setInstances((prev) => [
-      ...prev,
-      {
-        id,
-        label: `Terminal ${prev.length + 1}`,
-        terminalSnapshot: null,
-      },
-    ]);
+    setInstances((prev) => {
+      const count = prev.length + 1;
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      const rects = buildGridRects(cols, rows, count);
+
+      return [
+        ...prev.map((inst, i) => ({ ...inst, rect: rects[i] ?? inst.rect })),
+        {
+          id,
+          label: `Terminal ${count}`,
+          rect: rects[count - 1] ?? { x: 0, y: 0, w: 100, h: 100 },
+          terminalSnapshot: null,
+        },
+      ];
+    });
     setFocusedId(id);
   }, []);
 
@@ -858,12 +568,16 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
         const next = prev.filter((t) => t.id !== id);
 
         if (next.length === 0) {
-          // Always keep at least one terminal
           const newId = generateTerminalId();
-          return [{ id: newId, label: "Terminal 1", terminalSnapshot: null }];
+          return [{ id: newId, label: "Terminal 1", rect: { x: 0, y: 0, w: 100, h: 100 }, terminalSnapshot: null }];
         }
 
-        return next;
+        // Re-layout remaining terminals
+        const cols = Math.ceil(Math.sqrt(next.length));
+        const rows = Math.ceil(next.length / cols);
+        const rects = buildGridRects(cols, rows, next.length);
+
+        return next.map((inst, i) => ({ ...inst, rect: rects[i] ?? inst.rect }));
       });
 
       setFocusedId((prevFocused) => {
@@ -887,6 +601,32 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     [instances, fullscreenId],
   );
 
+  const applyPreset = useCallback((preset: LayoutPreset) => {
+    const total = preset.cols * preset.rows;
+
+    setInstances((prev) => {
+      const rects = buildGridRects(preset.cols, preset.rows, total);
+
+      // Reuse existing instances, create new ones if needed, drop extras
+      const result: TerminalInstance[] = [];
+
+      for (let i = 0; i < total; i++) {
+        if (i < prev.length) {
+          result.push({ ...prev[i], rect: rects[i] ?? prev[i].rect });
+        } else {
+          result.push({
+            id: generateTerminalId(),
+            label: `Terminal ${i + 1}`,
+            rect: rects[i] ?? { x: 0, y: 0, w: 100, h: 100 },
+            terminalSnapshot: null,
+          });
+        }
+      }
+
+      return result;
+    });
+  }, []);
+
   const focusTerminalByIndex = useCallback(
     (index: number) => {
       if (index >= 0 && index < instances.length) {
@@ -894,52 +634,6 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
       }
     },
     [instances],
-  );
-
-  const moveFocus = useCallback(
-    (direction: "up" | "down" | "left" | "right") => {
-      const layout = computeGridLayout(instances.length);
-      const currentIdx = instances.findIndex((t) => t.id === focusedId);
-
-      if (currentIdx === -1) return;
-
-      const currentCell = layout.cells[currentIdx];
-
-      if (!currentCell) return;
-
-      let targetRow = currentCell.row;
-      let targetCol = currentCell.col;
-
-      switch (direction) {
-        case "up":
-          targetRow = Math.max(0, currentCell.row - 1);
-          break;
-        case "down":
-          targetRow = Math.min(layout.rows - 1, currentCell.row + 1);
-          break;
-        case "left":
-          if (currentCell.col > 0) {
-            targetCol = currentCell.col - 1;
-          } else if (currentCell.row > 0) {
-            targetRow = currentCell.row - 1;
-            targetCol = layout.cols - 1;
-          }
-          break;
-        case "right":
-          targetCol = currentCell.col + 1;
-          break;
-      }
-
-      // Find the cell at the target position
-      const targetCell = layout.cells.find(
-        (c) => c.row === targetRow && c.col <= targetCol && targetCol < c.col + c.colSpan,
-      ) ?? layout.cells.find((c) => c.row === targetRow);
-
-      if (targetCell && targetCell.index !== currentIdx) {
-        setFocusedId(instances[targetCell.index].id);
-      }
-    },
-    [instances, focusedId],
   );
 
   const startRenaming = useCallback(
@@ -976,7 +670,110 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     [],
   );
 
-  // ---------- Keyboard shortcuts ----------
+  // -- Per-pane resize / drag ------------------------------------------------
+
+  const updateRect = useCallback((id: string, updater: (prev: Rect) => Rect) => {
+    setInstances((prev) =>
+      prev.map((inst) =>
+        inst.id === id ? { ...inst, rect: clampRect(updater(inst.rect)) } : inst,
+      ),
+    );
+  }, []);
+
+  const startEdgeResize = useCallback(
+    (id: string, edge: "right" | "bottom" | "left" | "top" | "corner", startX: number, startY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const canvasW = canvas.clientWidth;
+      const canvasH = canvas.clientHeight;
+      const inst = instances.find((t) => t.id === id);
+      if (!inst) return;
+
+      const startRect = { ...inst.rect };
+
+      const onMouseMove = (e: MouseEvent) => {
+        const dx = ((e.clientX - startX) / canvasW) * 100;
+        const dy = ((e.clientY - startY) / canvasH) * 100;
+
+        updateRect(id, () => {
+          const next = { ...startRect };
+
+          if (edge === "right" || edge === "corner") {
+            next.w = startRect.w + dx;
+          }
+          if (edge === "bottom" || edge === "corner") {
+            next.h = startRect.h + dy;
+          }
+          if (edge === "left") {
+            next.x = startRect.x + dx;
+            next.w = startRect.w - dx;
+          }
+          if (edge === "top") {
+            next.y = startRect.y + dy;
+            next.h = startRect.h - dy;
+          }
+
+          return next;
+        });
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor =
+        edge === "right" || edge === "left" ? "ew-resize" :
+        edge === "bottom" || edge === "top" ? "ns-resize" : "nwse-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [instances, updateRect],
+  );
+
+  const startDrag = useCallback(
+    (id: string, startX: number, startY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const canvasW = canvas.clientWidth;
+      const canvasH = canvas.clientHeight;
+      const inst = instances.find((t) => t.id === id);
+      if (!inst) return;
+
+      const startRect = { ...inst.rect };
+
+      const onMouseMove = (e: MouseEvent) => {
+        const dx = ((e.clientX - startX) / canvasW) * 100;
+        const dy = ((e.clientY - startY) / canvasH) * 100;
+
+        updateRect(id, () => ({
+          ...startRect,
+          x: startRect.x + dx,
+          y: startRect.y + dy,
+        }));
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "move";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [instances, updateRect],
+  );
+
+  // -- Keyboard shortcuts ----------------------------------------------------
 
   useEffect(() => {
     const isMac = navigator.platform.toUpperCase().includes("MAC");
@@ -984,50 +781,24 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     const handler = (e: KeyboardEvent) => {
       const mod = isMac ? e.metaKey : e.ctrlKey;
 
-      // Cmd/Ctrl+T: new terminal
       if (mod && e.key === "t") {
         e.preventDefault();
         addTerminal();
         return;
       }
 
-      // Cmd/Ctrl+W: close focused terminal
       if (mod && e.key === "w") {
         e.preventDefault();
         closeTerminal(focusedId);
         return;
       }
 
-      // Cmd/Ctrl+1-9: focus terminal by number
       if (mod && e.key >= "1" && e.key <= "9") {
         e.preventDefault();
         focusTerminalByIndex(parseInt(e.key, 10) - 1);
         return;
       }
 
-      // Alt+Arrow: move focus
-      if (e.altKey && !mod) {
-        switch (e.key) {
-          case "ArrowUp":
-            e.preventDefault();
-            moveFocus("up");
-            return;
-          case "ArrowDown":
-            e.preventDefault();
-            moveFocus("down");
-            return;
-          case "ArrowLeft":
-            e.preventDefault();
-            moveFocus("left");
-            return;
-          case "ArrowRight":
-            e.preventDefault();
-            moveFocus("right");
-            return;
-        }
-      }
-
-      // Escape: exit fullscreen or back to IDE
       if (e.key === "Escape") {
         if (fullscreenId) {
           e.preventDefault();
@@ -1036,11 +807,9 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
           e.preventDefault();
           onBackToIde();
         }
-
         return;
       }
 
-      // Ctrl+Tab: cycle focus
       if (e.ctrlKey && e.key === "Tab") {
         e.preventDefault();
         const currentIdx = instances.findIndex((t) => t.id === focusedId);
@@ -1051,7 +820,6 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
         return;
       }
 
-      // Ctrl+` : back to IDE
       if (e.ctrlKey && e.key === "`") {
         e.preventDefault();
         onBackToIde?.();
@@ -1062,18 +830,21 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
     window.addEventListener("keydown", handler, true);
 
     return () => window.removeEventListener("keydown", handler, true);
-  }, [addTerminal, closeTerminal, focusedId, focusTerminalByIndex, fullscreenId, instances, moveFocus, onBackToIde]);
+  }, [addTerminal, closeTerminal, focusedId, focusTerminalByIndex, fullscreenId, instances, onBackToIde]);
 
-  // ---------- Layout ----------
+  // -- Detect active preset --------------------------------------------------
 
-  const layout = useMemo(() => computeGridLayout(instances.length), [instances.length]);
-  const { gridTemplateColumns, gridTemplateRows, startColResize, startRowResize } =
-    useResizableGrid(layout.cols, layout.rows);
-  const focusedInstance = instances.find((instance) => instance.id === focusedId) ?? instances[0] ?? null;
+  const activePreset = useMemo(() => {
+    for (const preset of LAYOUT_PRESETS) {
+      if (preset.cols * preset.rows === instances.length) {
+        return preset.label;
+      }
+    }
+    return null;
+  }, [instances.length]);
 
-  // ---------- Render ----------
+  // -- Render ----------------------------------------------------------------
 
-  // If a terminal is fullscreen, render only that one
   const fullscreenInstance = fullscreenId ? instances.find((t) => t.id === fullscreenId) : null;
 
   return (
@@ -1147,7 +918,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
         <div className="terminal-sidebar-footer">
           <div>{connectionState === "live" ? "Daemon connected" : "Daemon offline"}</div>
           <div>{isMacPlatform() ? "Cmd" : "Ctrl"}+T new · {isMacPlatform() ? "Cmd" : "Ctrl"}+W close</div>
-          <div>Alt+Arrow move · Ctrl+` back</div>
+          <div>Drag edges to resize · Drag header to move</div>
         </div>
       </aside>
 
@@ -1164,7 +935,7 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
                 onDoubleClick={() => startRenaming(inst.id)}
                 title={`${inst.label} (${isMacPlatform() ? "Cmd" : "Ctrl"}+${i + 1})`}
               >
-                <span style={styles.cellIndex}>{i + 1}</span>
+                <span style={styles.paneIndex}>{i + 1}</span>
                 {editingLabelId === inst.id ? (
                   <input
                     type="text"
@@ -1177,27 +948,23 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") {
                         setEditingLabelId(null);
-                        setEditingLabelValue("");
                       }
                     }}
-                    onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <span>{inst.label}</span>
+                  inst.label
                 )}
-                {instances.length > 1 && (
-                  <button
-                    type="button"
-                    style={styles.tabClose}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeTerminal(inst.id);
-                    }}
-                    title="Close terminal"
-                  >
-                    ×
-                  </button>
-                )}
+                <button
+                  type="button"
+                  style={styles.tabClose}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTerminal(inst.id);
+                  }}
+                  title="Close terminal"
+                >
+                  ×
+                </button>
               </button>
             ))}
             <button
@@ -1208,17 +975,26 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
             >
               +
             </button>
+
+            {/* Layout presets */}
+            <div style={styles.presetGroup}>
+              {LAYOUT_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  style={styles.presetButton(activePreset === preset.label)}
+                  onClick={() => applyPreset(preset)}
+                  title={`${preset.label} layout (${preset.cols * preset.rows} terminals)`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
+
           <div style={styles.toolbarRight}>
-            {focusedInstance ? (
-              <span style={styles.shortcutHint}>
-                {focusedInstance.label} · {basename(focusedInstance.terminalSnapshot?.cwd ?? cwd)}
-              </span>
-            ) : null}
-            <span style={styles.shortcutHint}>
-              {isMacPlatform() ? "⌘T" : "Ctrl+T"} new &middot;{" "}
-              {isMacPlatform() ? "⌘W" : "Ctrl+W"} close &middot;{" "}
-              Alt+Arrow move
+            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--color-text-dimmest)" }}>
+              {instances.length} terminal{instances.length !== 1 ? "s" : ""}
             </span>
             {onBackToIde && (
               <button
@@ -1233,259 +1009,100 @@ export function TerminalWorkspace(props: TerminalWorkspaceProps) {
           </div>
         </div>
 
-        {/* Grid */}
-        {fullscreenInstance ? (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <TerminalCell
-              instance={fullscreenInstance}
-              index={instances.indexOf(fullscreenInstance)}
-              focused={true}
-              fullscreen={true}
-              connectionState={connectionState}
-              cwd={cwd}
-              fontSize={fontSize}
-              shell={shell}
-              onOpenSession={onOpenSession}
-              onResizeSession={onResizeSession}
-              onSendInput={onSendInput}
-              onFocus={() => setFocusedId(fullscreenInstance.id)}
-              onClose={() => closeTerminal(fullscreenInstance.id)}
-              onToggleFullscreen={() => toggleFullscreen(fullscreenInstance.id)}
-              onStartRename={() => startRenaming(fullscreenInstance.id)}
-              showResizeCol={false}
-              showResizeRow={false}
-              onStartColResize={() => {}}
-              onStartRowResize={() => {}}
-            />
-          </div>
-        ) : (
-          <div
-            ref={gridRef}
-            data-terminal-grid
-            style={{
-              ...styles.grid,
-              gridTemplateColumns,
-              gridTemplateRows,
-            }}
-          >
-            {layout.cells.map((cell) => {
-              const inst = instances[cell.index];
+        {/* Canvas */}
+        <div ref={canvasRef} style={styles.canvas}>
+          {(fullscreenInstance ? [fullscreenInstance] : instances).map((inst) => {
+            const isFocused = inst.id === focusedId;
+            const isFullscreen = inst.id === fullscreenId;
+            const idx = instances.indexOf(inst);
 
-              if (!inst) return null;
-
-              const isFocused = inst.id === focusedId;
-              const isLastCol = cell.col + cell.colSpan >= layout.cols;
-              const isLastRow = cell.row >= layout.rows - 1;
-
-              return (
+            return (
+              <div
+                key={inst.id}
+                style={styles.pane(inst.rect, isFocused, isFullscreen)}
+                onClick={() => setFocusedId(inst.id)}
+              >
+                {/* Header — draggable */}
                 <div
-                  key={inst.id}
-                  style={{
-                    gridColumn: cell.colSpan > 1 ? `span ${cell.colSpan}` : undefined,
-                    position: "relative",
-                    minHeight: 0,
-                    minWidth: 0,
-                    display: "flex",
-                    flexDirection: "column",
+                  style={styles.paneHeader(isFocused)}
+                  onMouseDown={(e) => {
+                    if (isFullscreen) return;
+                    e.preventDefault();
+                    startDrag(inst.id, e.clientX, e.clientY);
                   }}
+                  onDoubleClick={() => toggleFullscreen(inst.id)}
                 >
-                  <TerminalCell
-                    instance={inst}
-                    index={cell.index}
-                    focused={isFocused}
-                    fullscreen={false}
-                    connectionState={connectionState}
-                    cwd={cwd}
-                    fontSize={fontSize}
-                    shell={shell}
-                    onOpenSession={onOpenSession}
-                    onResizeSession={onResizeSession}
-                    onSendInput={onSendInput}
-                    onFocus={() => setFocusedId(inst.id)}
-                    onClose={() => closeTerminal(inst.id)}
-                    onToggleFullscreen={() => toggleFullscreen(inst.id)}
-                    onStartRename={() => startRenaming(inst.id)}
-                    showResizeCol={!isLastCol}
-                    showResizeRow={!isLastRow}
-                    onStartColResize={(startX, containerWidth) =>
-                      startColResize(cell.col + cell.colSpan - 1, startX, containerWidth)
-                    }
-                    onStartRowResize={(startY, containerHeight) =>
-                      startRowResize(cell.row, startY, containerHeight)
-                    }
-                  />
+                  <div style={{ display: "flex", alignItems: "center", overflow: "hidden" }}>
+                    <span style={styles.paneIndex}>{idx + 1}</span>
+                    <span style={styles.paneLabel}>{inst.label}</span>
+                  </div>
+                  <div style={styles.paneActions}>
+                    <button
+                      type="button"
+                      style={styles.paneActionButton}
+                      onClick={(e) => { e.stopPropagation(); toggleFullscreen(inst.id); }}
+                      title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                    >
+                      {isFullscreen ? "⊡" : "⊞"}
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.paneActionButton}
+                      onClick={(e) => { e.stopPropagation(); closeTerminal(inst.id); }}
+                      title="Close terminal"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+
+                {/* Terminal body */}
+                <div style={styles.paneBody}>
+                  <div style={styles.terminalWrapper}>
+                    <TerminalPane
+                      connectionState={connectionState}
+                      cwd={cwd}
+                      fontSize={fontSize}
+                      onOpenSession={onOpenSession}
+                      onResizeSession={onResizeSession}
+                      onSendInput={onSendInput}
+                      shell={shell}
+                      terminal={inst.terminalSnapshot}
+                      terminalId={inst.id}
+                    />
+                  </div>
+                </div>
+
+                {/* Resize handles — all edges + corner */}
+                {!isFullscreen && (
+                  <>
+                    <div
+                      style={styles.handleRight}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startEdgeResize(inst.id, "right", e.clientX, e.clientY); }}
+                    />
+                    <div
+                      style={styles.handleBottom}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startEdgeResize(inst.id, "bottom", e.clientX, e.clientY); }}
+                    />
+                    <div
+                      style={styles.handleCorner}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startEdgeResize(inst.id, "corner", e.clientX, e.clientY); }}
+                    />
+                    <div
+                      style={styles.handleLeft}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startEdgeResize(inst.id, "left", e.clientX, e.clientY); }}
+                    />
+                    <div
+                      style={styles.handleTop}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startEdgeResize(inst.id, "top", e.clientX, e.clientY); }}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// TerminalCell — wraps TerminalPane with header and resize handles
-// ---------------------------------------------------------------------------
-
-type TerminalCellProps = {
-  instance: TerminalInstance;
-  index: number;
-  focused: boolean;
-  fullscreen: boolean;
-  connectionState: ConnectionState;
-  cwd: string;
-  fontSize: number;
-  shell: string;
-  onOpenSession: TerminalWorkspaceProps["onOpenSession"];
-  onResizeSession: TerminalWorkspaceProps["onResizeSession"];
-  onSendInput: TerminalWorkspaceProps["onSendInput"];
-  onFocus: () => void;
-  onClose: () => void;
-  onToggleFullscreen: () => void;
-  onStartRename: () => void;
-  showResizeCol: boolean;
-  showResizeRow: boolean;
-  onStartColResize: (startX: number, containerWidth: number) => void;
-  onStartRowResize: (startY: number, containerHeight: number) => void;
-};
-
-function TerminalCell(props: TerminalCellProps) {
-  const {
-    instance,
-    index,
-    focused,
-    fullscreen,
-    connectionState,
-    cwd,
-    fontSize,
-    shell,
-    onOpenSession,
-    onResizeSession,
-    onSendInput,
-    onFocus,
-    onClose,
-    onToggleFullscreen,
-    onStartRename,
-    showResizeCol,
-    showResizeRow,
-    onStartColResize,
-    onStartRowResize,
-  } = props;
-
-  return (
-    <div
-      style={styles.cell(focused, fullscreen)}
-      onClick={onFocus}
-    >
-      {/* Cell header */}
-      <div
-        style={styles.cellHeader(focused)}
-        onDoubleClick={onToggleFullscreen}
-      >
-        <div style={{ display: "flex", alignItems: "center", overflow: "hidden" }}>
-          <span style={styles.cellIndex}>{index + 1}</span>
-          <span style={styles.cellLabel} onDoubleClick={(e) => { e.stopPropagation(); onStartRename(); }}>
-            {instance.label}
-          </span>
-        </div>
-        <div style={styles.cellActions}>
-          <button
-            type="button"
-            style={styles.cellActionButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFullscreen();
-            }}
-            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {fullscreen ? "⊡" : "⊞"}
-          </button>
-          <button
-            type="button"
-            style={styles.cellActionButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            title="Close terminal"
-          >
-            ×
-          </button>
-        </div>
-      </div>
-
-      {/* Terminal body */}
-      <div style={styles.cellBody}>
-        <div style={styles.terminalWrapper}>
-          <TerminalPane
-            connectionState={connectionState}
-            cwd={cwd}
-            fontSize={fontSize}
-            onOpenSession={onOpenSession}
-            onResizeSession={onResizeSession}
-            onSendInput={onSendInput}
-            shell={shell}
-            terminal={instance.terminalSnapshot}
-          />
-        </div>
-      </div>
-
-      {/* Resize handles */}
-      {showResizeCol && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            right: -3,
-            width: 6,
-            height: "100%",
-            cursor: "col-resize",
-            zIndex: 10,
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            const gridEl = (e.currentTarget as HTMLElement).closest("[data-terminal-grid]");
-
-            if (gridEl) {
-              onStartColResize(e.clientX, gridEl.clientWidth);
-            }
-          }}
-        />
-      )}
-      {showResizeRow && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: -3,
-            left: 0,
-            width: "100%",
-            height: 6,
-            cursor: "row-resize",
-            zIndex: 10,
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            const gridEl = (e.currentTarget as HTMLElement).closest("[data-terminal-grid]");
-
-            if (gridEl) {
-              onStartRowResize(e.clientY, gridEl.clientHeight);
-            }
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isMacPlatform(): boolean {
-  return typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
-}
-
-function basename(filePath: string): string {
-  return filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? filePath;
 }

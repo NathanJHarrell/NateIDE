@@ -228,7 +228,7 @@ export function PipelineEditor({ agents, workspaceId, currentUserId }: PipelineE
   const [isNewUnsaved, setIsNewUnsaved] = useState(false);
 
   const workerAgents = useMemo(
-    () => agents.filter((a) => a.id !== "agent-controller"),
+    () => agents,
     [agents],
   );
 

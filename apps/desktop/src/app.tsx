@@ -250,13 +250,22 @@ function isWindowsPath(filePath: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("\\\\");
 }
 
-function isCrossPlatformStalePath(filePath: string): boolean {
+function isCrossPlatformStalePath(filePath: string, daemonPlatform?: string): boolean {
   const trimmed = filePath.trim();
 
   if (!trimmed) {
     return true;
   }
 
+  // When we know the daemon's platform, filter paths that don't match it.
+  // e.g. daemon is "linux" (WSL) — discard Windows-style cached paths.
+  // e.g. daemon is "win32" — discard Unix-style cached paths.
+  if (daemonPlatform) {
+    const daemonIsWindows = daemonPlatform === "win32";
+    return daemonIsWindows ? trimmed.startsWith("/") : isWindowsPath(trimmed);
+  }
+
+  // Fallback: use client platform heuristic (before daemon is contacted).
   return isWindowsClient() ? trimmed.startsWith("/") : isWindowsPath(trimmed);
 }
 
@@ -1311,7 +1320,7 @@ export function App() {
 }
 
 function AppContent() {
-  const { userId, user } = useCurrentUser();
+  const { userId, user, signOut } = useCurrentUser();
 
   // Convex data subscriptions
   const convexWorkspaces = useConvexWorkspaces(userId ?? undefined);
@@ -1355,6 +1364,7 @@ function AppContent() {
   const [workspaces, setWorkspaces] = useState<WorkspaceCandidate[]>([]);
   const [workspacePath, setWorkspacePath] = useState(() => loadProjectTabs()[0]?.path ?? guessFallbackRoot());
   const [daemonPaths, setDaemonPaths] = useState({ homePath: "", workspaceRoot: "" });
+  const [daemonPlatform, setDaemonPlatform] = useState<string | undefined>(undefined);
   const [messageDraft, setMessageDraft] = useState(
     "Have Claude route this change, let Codex implement the shell, and ask Gemini to review terminal attribution.",
   );
@@ -1542,15 +1552,29 @@ function AppContent() {
 
         if (cancelled) return;
 
+        // Detect cross-platform scenario (e.g. Windows client + WSL daemon)
+        const platform = health.platform;
+        const daemonIsUnix = platform === "linux" || platform === "darwin";
+        const crossPlatform = isWindowsClient() && daemonIsUnix;
+
         startTransition(() => {
           setConnectionState("live");
+          setDaemonPlatform(platform);
           setDaemonPaths({
             homePath: health.userHome ?? "",
             workspaceRoot: health.workspaceRoot,
           });
           setWorkspaces(candidates);
           setSettings(ideSettings);
-          setNotice("");
+          setNotice(crossPlatform ? "Connected to WSL daemon" : "");
+
+          // Re-filter cached project tabs against the daemon's actual platform
+          // so stale paths from a different platform are discarded.
+          if (platform) {
+            setProjectTabs((prev) =>
+              prev.filter((tab) => !isCrossPlatformStalePath(tab.path, platform)),
+            );
+          }
         });
         applyBootstrap(session);
       } catch (error) {
@@ -1581,9 +1605,7 @@ function AppContent() {
     currentBootstrap?.workspaceSnapshot.documents.find(
       (document) => document.path === currentBootstrap.workspaceSnapshot.activeDocumentPath,
     ) ?? currentBootstrap?.workspaceSnapshot.documents[0] ?? null;
-  const workerAgents = currentBootstrap?.agents.filter(
-    (agent) => agent.id !== "agent-controller",
-  ) ?? [];
+  const workerAgents = currentBootstrap?.agents ?? [];
   const selectedAgents = workerAgents.filter((agent) => selectedAgentIds.includes(agent.id));
   const hasStreamingRuns = (currentBootstrap?.runs ?? []).some(
     (r) => r.status === "streaming" || r.status === "starting",
@@ -1801,6 +1823,7 @@ function AppContent() {
   async function openInteractiveTerminal(input: {
     cols: number;
     cwd: string;
+    id?: string;
     rows: number;
     shell: string;
   }) {
@@ -2509,6 +2532,7 @@ function AppContent() {
             onSendInput={sendTerminalInput}
             shell={settings.terminal.shell}
             terminal={interactiveTerminal}
+            terminalId="terminal-main"
           />
         );
       case "diagnostics":
@@ -2622,6 +2646,14 @@ function AppContent() {
             {connectionState === "live" ? "live" : connectionState}
           </span>
           <span>{currentBootstrap.workspaceSnapshot.git.branch}</span>
+          <button
+            type="button"
+            className="sign-out-btn"
+            onClick={() => void signOut()}
+            title="Sign out"
+          >
+            Sign out
+          </button>
         </div>
       </header>
       {notice ? <div className="notice-banner">{notice}</div> : null}

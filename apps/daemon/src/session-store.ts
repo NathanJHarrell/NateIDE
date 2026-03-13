@@ -343,13 +343,14 @@ export class LocalSessionStore {
     input: {
       cols?: number;
       cwd?: string;
+      id?: string;
       shell?: string;
       rows?: number;
     },
     initiatedBy: ActorRef = DEFAULT_USER,
   ) {
     const state = this.getRequiredState();
-    const terminalSessionId = "terminal-main";
+    const terminalSessionId = input.id?.trim() || `terminal-${randomUUID().slice(0, 8)}`;
     const cols = Math.max(40, input.cols ?? 120);
     const rows = Math.max(12, input.rows ?? 32);
     const cwd = input.cwd?.trim() || state.workspace.rootPath;

@@ -163,10 +163,19 @@ function SoulDocumentEditor({
   );
 }
 
+type SettingsTab = "general" | "agent-roles" | "api-keys";
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "agent-roles", label: "Agent Roles" },
+  { id: "api-keys", label: "API Keys" },
+];
+
 export function SettingsView(props: SettingsViewProps) {
   const { onSave, onThemePreview, settings } = props;
   const [draft, setDraft] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
   useEffect(() => {
     setDraft(settings);
@@ -198,6 +207,20 @@ export function SettingsView(props: SettingsViewProps) {
           </button>
         </header>
 
+        <nav className="settings-tabs">
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`settings-tab ${activeTab === tab.id ? "settings-tab-active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {activeTab === "api-keys" && (
         <section className="settings-group">
           <h3>Agent API Keys</h3>
           <div className="settings-grid">
@@ -259,7 +282,9 @@ export function SettingsView(props: SettingsViewProps) {
             </label>
           </div>
         </section>
+        )}
 
+        {activeTab === "agent-roles" && (<>
         <section className="settings-group">
           <h3>Agent Roles</h3>
           <p className="settings-hint">Configure agent roles, their providers, models, prompts, and trigger keywords.</p>
@@ -396,6 +421,34 @@ export function SettingsView(props: SettingsViewProps) {
         </section>
 
         <section className="settings-group">
+          <h3>Agent Souls</h3>
+          <p className="settings-hint">
+            Behavioral guidelines that shape each agent's personality, communication style, and collaboration behavior.
+            Per-project overrides can be placed in <code>.nateide/souls/</code> files.
+          </p>
+          <div className="agent-souls-list">
+            {Object.entries(draft.soulDocuments ?? {}).map(([agentId, soul]) => (
+              <SoulDocumentEditor
+                key={agentId}
+                agentId={agentId}
+                soul={soul}
+                onChange={(updated) =>
+                  setDraft((current) => ({
+                    ...current,
+                    soulDocuments: {
+                      ...current.soulDocuments,
+                      [agentId]: updated,
+                    },
+                  }))
+                }
+              />
+            ))}
+          </div>
+        </section>
+        </>)}
+
+        {activeTab === "general" && (<>
+        <section className="settings-group">
           <h3>Conversation Loop</h3>
           <div className="settings-grid">
             <label className="settings-checkbox">
@@ -433,32 +486,6 @@ export function SettingsView(props: SettingsViewProps) {
                 }
               />
             </label>
-          </div>
-        </section>
-
-        <section className="settings-group">
-          <h3>Agent Souls</h3>
-          <p className="settings-hint">
-            Behavioral guidelines that shape each agent's personality, communication style, and collaboration behavior.
-            Per-project overrides can be placed in <code>.nateide/souls/</code> files.
-          </p>
-          <div className="agent-souls-list">
-            {Object.entries(draft.soulDocuments ?? {}).map(([agentId, soul]) => (
-              <SoulDocumentEditor
-                key={agentId}
-                agentId={agentId}
-                soul={soul}
-                onChange={(updated) =>
-                  setDraft((current) => ({
-                    ...current,
-                    soulDocuments: {
-                      ...current.soulDocuments,
-                      [agentId]: updated,
-                    },
-                  }))
-                }
-              />
-            ))}
           </div>
         </section>
 
@@ -581,6 +608,7 @@ export function SettingsView(props: SettingsViewProps) {
             </label>
           </div>
         </section>
+        </>)}
       </article>
     </div>
   );

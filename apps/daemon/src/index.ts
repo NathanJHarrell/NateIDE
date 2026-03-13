@@ -374,6 +374,7 @@ const server = createServer(async (request, response) => {
       const body = await readJson<{
         cols?: number;
         cwd?: string;
+        id?: string;
         initiatedBy?: ActorRef;
         rows?: number;
         shell?: string;
@@ -385,6 +386,7 @@ const server = createServer(async (request, response) => {
             {
               cols: body.cols,
               cwd: body.cwd,
+              id: body.id,
               rows: body.rows,
               shell: body.shell,
             },
@@ -414,16 +416,22 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      writeJson(
-        response,
-        json(
-          store.resizeTerminalSession(
-            decodeURIComponent(terminalResizeMatch[1]),
-            body.cols,
-            body.rows,
+      try {
+        writeJson(
+          response,
+          json(
+            store.resizeTerminalSession(
+              decodeURIComponent(terminalResizeMatch[1]),
+              body.cols,
+              body.rows,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        const status = statusForWorkspaceError(error);
+        writeJson(response, json({ ok: false, message }, status));
+      }
       return;
     }
 

@@ -17,6 +17,7 @@ type TerminalPaneProps = {
   onOpenSession: (input: {
     cols: number;
     cwd: string;
+    id?: string;
     rows: number;
     shell: string;
   }) => Promise<void>;
@@ -24,6 +25,7 @@ type TerminalPaneProps = {
   onSendInput: (terminalSessionId: string, data: string) => Promise<void>;
   shell: string;
   terminal: TerminalSessionSnapshot | null;
+  terminalId?: string;
 };
 
 const TERMINAL_THEME = {
@@ -58,6 +60,7 @@ export function TerminalPane(props: TerminalPaneProps) {
     onSendInput,
     shell,
     terminal,
+    terminalId,
   } = props;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -188,6 +191,7 @@ export function TerminalPane(props: TerminalPaneProps) {
     void onOpenSession({
       cols: xterm.cols,
       cwd,
+      id: terminalId,
       rows: xterm.rows,
       shell,
     })
@@ -199,7 +203,7 @@ export function TerminalPane(props: TerminalPaneProps) {
       .finally(() => {
         isCreatingSessionRef.current = false;
       });
-  }, [connectionState, cwd, onOpenSession, shell, terminal?.status]);
+  }, [connectionState, cwd, onOpenSession, shell, terminal?.status, terminalId]);
 
   useEffect(() => {
     const xterm = terminalRef.current;
@@ -258,6 +262,7 @@ export function TerminalPane(props: TerminalPaneProps) {
               void onOpenSession({
                 cols: xterm.cols,
                 cwd,
+                id: terminalId,
                 rows: xterm.rows,
                 shell,
               }).catch((error) => {
